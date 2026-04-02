@@ -4,7 +4,7 @@ import * as L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import axios from 'axios';
 import localforage from 'localforage';
-import { MapPin, Image as ImageIcon, Plus, Lock, X, Map as MapIcon, Globe, ChevronDown, ChevronRight } from 'lucide-react';
+import { MapPin, Image as ImageIcon, Lock, X, Map as MapIcon, Globe, ChevronDown, ChevronRight, EyeOff, Eye } from 'lucide-react';
 
 localforage.config({
   name: 'Dunya DB',
@@ -61,6 +61,8 @@ export default function App() {
   const [expandedCart, setExpandedCart] = useState<string | null>(null);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
+  const [hiddenIds, setHiddenIds] = useState<Set<string>>(new Set());
+  const [showHidden, setShowHidden] = useState(false);
 
   const showToast = (msg: string, type: 'success' | 'error' = 'success') => {
     setToast({ msg, type });
@@ -77,6 +79,23 @@ export default function App() {
   const geoJsonWorldRef = useRef<any>(null);
   const geoJsonProvinceRef = useRef<any>(null);
   const placesRef = useRef<Place[]>(places);
+
+  useEffect(() => {
+    // hiddenIds'i localforage'dan yükle
+    localforage.getItem<string[]>('hidden_ids').then(ids => {
+      if (ids) setHiddenIds(new Set(ids));
+    });
+  }, []);
+
+  const toggleHide = (placeId: string) => {
+    setHiddenIds(prev => {
+      const next = new Set(prev);
+      if (next.has(placeId)) next.delete(placeId); else next.add(placeId);
+      localforage.setItem('hidden_ids', Array.from(next));
+      showToast(next.has(placeId) ? 'Görseli gizlendi' : 'Görsel gösterildi');
+      return next;
+    });
+  };
 
   // State'i Ref içinde de güncel tutarak Leaflet eventlerinde taze veriye ulaşalım
   useEffect(() => {
@@ -335,7 +354,8 @@ export default function App() {
   };
 
   const countryPlaces = places.filter(p => p.country_id === selectedCountry?.id);
-  const countryImages = countryPlaces.filter(p => p.imageUrl).map(p => ({ url: p.imageUrl!, city: p.city }));
+  const countryImages = countryPlaces.filter(p => p.imageUrl && (showHidden || !hiddenIds.has(p.id))).map(p => ({ url: p.imageUrl!, city: p.city, id: p.id }));
+  const hiddenImagesCount = countryPlaces.filter(p => p.imageUrl && hiddenIds.has(p.id)).length;
 
   const visitedCountries = useMemo(() => {
     const map = new Map<string, { country_id: string, country_name: string, cities: string[] }>();
@@ -583,11 +603,22 @@ export default function App() {
             <div className="flex-1 overflow-y-auto p-5 sm:p-6 scrollbar-thin scrollbar-thumb-slate-700">
               {activeTab === 'view' && (
                 <div className="flex flex-col gap-6">
-                  {countryImages.length > 0 && (
+                       {countryImages.length > 0 && (
                     <div className="mb-4">
                       <h3 className="text-slate-400 text-xs font-bold mb-3 uppercase tracking-widest flex justify-between items-center border-b border-white/10 pb-2">
                         <span>Bu Ülke Albümü</span>
-                        <span className="bg-white/10 text-[10px] py-1 px-2 rounded-lg">{countryImages.length} FOTO</span>
+                        <div className="flex items-center gap-2">
+                          {hiddenImagesCount > 0 && (
+                            <button
+                              onClick={() => setShowHidden(s => !s)}
+                              className="flex items-center gap-1 text-[10px] py-1 px-2 rounded-lg bg-white/10 hover:bg-white/20 transition-colors"
+                            >
+                              {showHidden ? <Eye size={10}/> : <EyeOff size={10}/>}
+                              {showHidden ? 'Gizlileri Şakla' : `${hiddenImagesCount} Gizli`}
+                            </button>
+                          )}
+                          <span className="bg-white/10 text-[10px] py-1 px-2 rounded-lg">{countryImages.length} FOTO</span>
+                        </div>
                       </h3>
                       {countryImages.length === 1 ? (
                         <div className="rounded-xl overflow-hidden border border-white/10 shadow-2xl relative group">
@@ -595,6 +626,13 @@ export default function App() {
                           <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent flex items-end p-5">
                             <span className="text-white font-bold text-lg">{countryImages[0].city}</span>
                           </div>
+                          <button
+                            onClick={() => toggleHide(countryImages[0].id)}
+                            className="absolute top-3 right-3 bg-black/60 hover:bg-black/80 p-2 rounded-full border border-white/10 transition-all opacity-0 group-hover:opacity-100"
+                            title="Gizle"
+                          >
+                            <EyeOff size={14} className="text-white" />
+                          </button>
                         </div>
                       ) : (
                         <div className="grid grid-cols-2 gap-3">
@@ -604,6 +642,13 @@ export default function App() {
                               <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 to-transparent p-3">
                                 <span className="text-white text-xs font-bold">{img.city}</span>
                               </div>
+                              <button
+                                onClick={() => toggleHide(img.id)}
+                                className="absolute top-2 right-2 bg-black/60 hover:bg-rose-900/80 p-1.5 rounded-full border border-white/10 transition-all opacity-0 group-hover:opacity-100"
+                                title="Gizle"
+                              >
+                                <EyeOff size={12} className="text-white" />
+                              </button>
                             </div>
                           ))}
                         </div>
