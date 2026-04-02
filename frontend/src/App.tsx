@@ -273,11 +273,6 @@ export default function App() {
     e.preventDefault();
     if (!selectedCountry || !selectedProvince) return;
 
-    if (formData.password !== "test") {
-      showToast("Yanlış şifre!", 'error');
-      return;
-    }
-
     try {
       // Resmi Base64'e kodla
       let b64Image: string | undefined = undefined;
@@ -309,13 +304,21 @@ export default function App() {
         fd.append('color', newPlace.color);
         fd.append('password', formData.password);
         if (formData.note) fd.append('note', formData.note);
-        if (formData.file) fd.append('file', formData.file);
+        if (b64Image) fd.append('imageUrl', b64Image); // Base64 resmi gönder
         const res = await axios.post('/api/places', fd);
+        if (res.status === 403) {
+          showToast('Yanlış şifre!', 'error');
+          return;
+        }
         const savedPlace = { ...newPlace, ...res.data };
         const updatedPlaces = [...places, savedPlace];
         setPlaces(updatedPlaces);
         localforage.setItem('places_db', updatedPlaces);
-      } catch {
+      } catch (apiErr: any) {
+        if (apiErr?.response?.status === 403) {
+          showToast('Yanlış şifre!', 'error');
+          return;
+        }
         // Backend çalışmıyorsa yerel kaydet
         const updatedPlaces = [...places, newPlace];
         setPlaces(updatedPlaces);
