@@ -132,6 +132,7 @@ async def create_place(
     
     result = await places_collection.insert_one(place_doc)
     place_doc["id"] = str(result.inserted_id)
+    del place_doc["_id"]  # ObjectId JSON'a çevrilemiyor, sil
     return place_doc
 
 @app.get("/")
