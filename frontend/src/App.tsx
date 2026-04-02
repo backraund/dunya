@@ -221,6 +221,7 @@ export default function App() {
   };
 
   const getPlaceColor = (countryId: string, shapeName: string) => {
+    // hiddenIds ref'e erişemiyoruz, ama snapshot alabiliyoruz
     const place = placesRef.current.find(p => p.country_id === countryId && p.city === shapeName);
     return place ? place.color : null;
   };
@@ -354,12 +355,13 @@ export default function App() {
   };
 
   const countryPlaces = places.filter(p => p.country_id === selectedCountry?.id);
-  const countryImages = countryPlaces.filter(p => p.imageUrl && (showHidden || !hiddenIds.has(p.id))).map(p => ({ url: p.imageUrl!, city: p.city, id: p.id }));
+  const visibleCountryPlaces = countryPlaces.filter(p => !hiddenIds.has(p.id));
+  const countryImages = visibleCountryPlaces.filter(p => p.imageUrl).map(p => ({ url: p.imageUrl!, city: p.city, id: p.id }));
   const hiddenImagesCount = countryPlaces.filter(p => p.imageUrl && hiddenIds.has(p.id)).length;
 
   const visitedCountries = useMemo(() => {
     const map = new Map<string, { country_id: string, country_name: string, cities: string[] }>();
-    places.forEach(p => {
+    places.filter(p => !hiddenIds.has(p.id)).forEach(p => {
       if (!map.has(p.country_id)) {
         map.set(p.country_id, { country_id: p.country_id, country_name: p.country_name, cities: [] });
       }
@@ -369,7 +371,7 @@ export default function App() {
       }
     });
     return Array.from(map.values()).sort((a,b) => b.cities.length - a.cities.length);
-  }, [places]);
+  }, [places, hiddenIds]);
 
   return (
     <div className="relative w-full bg-black text-slate-200 font-sans overflow-hidden" style={{ height: '100dvh' }}>
@@ -657,17 +659,26 @@ export default function App() {
                   )}
                   <div className="mt-2">
                     <h3 className="text-slate-400 text-xs font-bold mb-3 uppercase tracking-widest border-b border-white/10 pb-2">{selectedProvince} Log Kaydı</h3>
-                    {countryPlaces.filter(p => p.city === selectedProvince).length === 0 ? (
+                    {visibleCountryPlaces.filter(p => p.city === selectedProvince).length === 0 ? (
                       <div className="bg-black/40 rounded-xl p-8 text-center border border-white/5">
                         <p className="text-slate-500 text-sm mb-4">Bu koordinat için aktif bir veri bulunamadı.</p>
                         <button onClick={() => setActiveTab('add')} className="text-blue-400 font-bold text-xs uppercase tracking-wider border border-blue-500/30 px-4 py-3 rounded-lg bg-blue-500/10 min-h-[44px]">Sisteme Giriş Yap</button>
                       </div>
                     ) : (
                       <div className="flex flex-col gap-4">
-                        {countryPlaces.filter(p => p.city === selectedProvince).map((place, idx) => (
+                        {visibleCountryPlaces.filter(p => p.city === selectedProvince).map((place, idx) => (
                           <div key={idx} className="bg-gradient-to-br from-slate-800 to-black rounded-xl border border-white/10 p-5 flex flex-col gap-3 relative shadow-2xl">
                             <div className="absolute top-5 right-5 w-4 h-4 rounded-full border-2 border-slate-900" style={{ backgroundColor: place.color }}></div>
-                            <h3 className="text-lg font-bold text-white">{place.city}</h3>
+                            <div className="flex items-center justify-between pr-8">
+                              <h3 className="text-lg font-bold text-white">{place.city}</h3>
+                              <button
+                                onClick={() => toggleHide(place.id)}
+                                className="text-slate-500 hover:text-rose-400 transition-colors p-1.5 rounded-lg hover:bg-rose-500/10"
+                                title="Bu kaydı gizle"
+                              >
+                                <EyeOff size={15} />
+                              </button>
+                            </div>
                             {place.note && (
                               <p className="text-slate-300 text-sm mt-1 bg-black/60 p-4 rounded-xl border border-white/5 leading-relaxed">{place.note}</p>
                             )}
