@@ -54,7 +54,15 @@ services:
       - /app/node_modules
     depends_on:
       - backend
+    networks:
+      - default
+      - onox-proxy
 
 volumes:
   mongodb_data:
   minio_data:
+
+networks:
+  onox-proxy:
+    external: true
+    name: onox_onox-network
