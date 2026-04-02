@@ -33,12 +33,11 @@ function MapController({ selectedBounds }: { selectedBounds: L.LatLngBounds | nu
   const map = useMap();
   useEffect(() => {
     if (selectedBounds) {
-      // Ekran boyutuna göre sağ-sol/üst-alt şeklinde uyarla
-      // NOT: maxZoom'u tamamen kaldırdık. Küçük ülkeler için otomatik tam orantılı hesaplayacak!
-      map.flyToBounds(selectedBounds, { padding: [40, 40], duration: 1.5 });
+      map.flyToBounds(selectedBounds, { padding: [50, 50], duration: 1.5 });
     } else {
-      // Küresel görünüme dönerken direkt Türkiye & Avrupa merkezli daha yakın bir görünüm
-      map.flyTo([39.0, 35.0], 4, { duration: 1.5 });
+      // Mobile'da daha geniş görünüm
+      const isMobile = window.innerWidth < 768;
+      map.flyTo([39.0, 35.0], isMobile ? 2 : 4, { duration: 1.5 });
     }
   }, [selectedBounds, map]);
   return null;
@@ -60,6 +59,7 @@ export default function App() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'view' | 'add'>('view');
   const [expandedCart, setExpandedCart] = useState<string | null>(null);
+  const [isCartOpen, setIsCartOpen] = useState(false);
   
   const [formData, setFormData] = useState({
     color: PASTEL_COLORS[0],
@@ -320,11 +320,38 @@ export default function App() {
   }, [places]);
 
   return (
-    <div className="relative w-full h-screen bg-black text-slate-200 font-sans overflow-hidden">
-      
-      {/* Sol Panel Bölgesi (Başlık + Dinamik Cart) */}
-      <div className="absolute top-6 left-6 z-[1000] w-[320px] max-h-[calc(100vh-48px)] flex flex-col gap-4 pointer-events-none">
-        
+    <div className="relative w-full bg-black text-slate-200 font-sans overflow-hidden" style={{ height: '100dvh' }}>
+
+      {/* ===== MOBILE TOP BAR ===== */}
+      <div className="md:hidden absolute top-0 left-0 right-0 z-[1000] flex items-center justify-between px-4 py-3 bg-black/70 backdrop-blur-xl border-b border-white/10"
+        style={{ paddingTop: 'max(12px, env(safe-area-inset-top))' }}>
+        <div className="flex items-center gap-2">
+          <Globe className="text-blue-400" size={22} />
+          <span className="text-white font-extrabold text-lg">Dünyam</span>
+        </div>
+        <div className="flex items-center gap-2">
+          {selectedCountry && (
+            <button
+              onClick={handleZoomOut}
+              className="flex items-center gap-1.5 bg-slate-800 text-white px-3 py-2 rounded-xl text-xs font-bold border border-slate-600"
+            >
+              <MapIcon size={14} /> Geri
+            </button>
+          )}
+          {visitedCountries.length > 0 && !selectedCountry && (
+            <button
+              onClick={() => setIsCartOpen(!isCartOpen)}
+              className="relative bg-slate-800 text-white px-3 py-2 rounded-xl text-xs font-bold border border-slate-600 flex items-center gap-1.5"
+            >
+              <MapPin size={14} className="text-blue-400" />
+              {visitedCountries.length} Ülke
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* ===== DESKTOP LEFT PANEL ===== */}
+      <div className="hidden md:flex absolute top-6 left-6 z-[1000] w-[320px] max-h-[calc(100vh-48px)] flex-col gap-4 pointer-events-none">
         {/* Üst Başlık & Kontroller */}
         <div className="bg-black/60 backdrop-blur-xl p-5 rounded-2xl shadow-2xl border border-white/10 flex flex-col gap-4 pointer-events-auto shrink-0">
           <div>
@@ -334,7 +361,6 @@ export default function App() {
             </h1>
             <p className="text-slate-400 mt-1 text-xs uppercase tracking-widest font-bold">Low-Poly Siyasi Harita</p>
           </div>
-
           {selectedCountry && (
             <div className="bg-slate-900/60 p-3 rounded-lg border border-slate-700/50 flex flex-col gap-2">
               <div className="text-white font-bold text-lg flex items-center gap-2">
@@ -347,19 +373,17 @@ export default function App() {
               ) : null}
             </div>
           )}
-
           {selectedCountry && (
-            <button 
+            <button
               onClick={handleZoomOut}
               className="flex items-center justify-center gap-2 bg-gradient-to-r from-slate-800 to-slate-700 hover:from-slate-700 hover:to-slate-600 text-white p-3 rounded-xl text-sm font-semibold transition-all border border-slate-600 shadow-lg"
             >
-              <MapIcon size={18} />
-              Küresel Görünüme Dön
+              <MapIcon size={18} /> Küresel Görünüme Dön
             </button>
           )}
         </div>
 
-        {/* Ziyaret Edilenler Cartı (Sadece Küresel Görünümde) */}
+        {/* Desktop Travel Cart */}
         {visitedCountries.length > 0 && !selectedCountry && (
           <div className="bg-black/60 backdrop-blur-xl p-5 rounded-2xl shadow-2xl border border-white/10 pointer-events-auto flex flex-col gap-3 overflow-hidden flex-1 min-h-0">
             <h2 className="text-white font-bold tracking-widest text-xs uppercase border-b border-white/10 pb-3 flex justify-between items-center shrink-0">
@@ -369,7 +393,7 @@ export default function App() {
             <div className="overflow-y-auto scrollbar-thin scrollbar-thumb-slate-700 pr-2 flex flex-col gap-2">
               {visitedCountries.map(vc => (
                 <div key={vc.country_id} className="bg-white/5 rounded-xl border border-white/5 overflow-hidden transition-all">
-                  <button 
+                  <button
                     onClick={() => setExpandedCart(expandedCart === vc.country_id ? null : vc.country_id)}
                     className="w-full text-left p-3 flex justify-between items-center hover:bg-white/10 transition-colors"
                   >
@@ -377,18 +401,14 @@ export default function App() {
                       {expandedCart === vc.country_id ? <ChevronDown size={14} className="text-blue-400" /> : <ChevronRight size={14} className="text-slate-500" />}
                       {vc.country_name}
                     </span>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-bold text-slate-300 bg-black/50 px-2 py-1 rounded-lg">{vc.cities.length} İl</span>
-                    </div>
+                    <span className="text-xs font-bold text-slate-300 bg-black/50 px-2 py-1 rounded-lg">{vc.cities.length} İl</span>
                   </button>
                   {expandedCart === vc.country_id && (
-                     <div className="px-4 pb-3 pt-1 flex flex-col gap-1.5 border-t border-white/5 bg-black/30">
-                       {vc.cities.map(city => (
-                         <div key={city} className="text-xs text-slate-400 pl-2 border-l-2 border-blue-400/50 py-1 font-semibold">
-                           {city}
-                         </div>
-                       ))}
-                     </div>
+                    <div className="px-4 pb-3 pt-1 flex flex-col gap-1.5 border-t border-white/5 bg-black/30">
+                      {vc.cities.map(city => (
+                        <div key={city} className="text-xs text-slate-400 pl-2 border-l-2 border-blue-400/50 py-1 font-semibold">{city}</div>
+                      ))}
+                    </div>
                   )}
                 </div>
               ))}
@@ -397,26 +417,62 @@ export default function App() {
         )}
       </div>
 
-      {/* Leaflet Haritası */}
+      {/* ===== MOBILE CART BOTTOM SHEET ===== */}
+      {isCartOpen && visitedCountries.length > 0 && !selectedCountry && (
+        <div className="md:hidden fixed inset-0 z-[1500] flex flex-col justify-end">
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setIsCartOpen(false)} />
+          <div className="relative bg-slate-900 rounded-t-3xl border-t border-white/10 max-h-[70vh] flex flex-col"
+            style={{ paddingBottom: 'max(24px, env(safe-area-inset-bottom))' }}>
+            <div className="flex justify-center pt-3 pb-2">
+              <div className="w-10 h-1 bg-white/20 rounded-full" />
+            </div>
+            <div className="flex justify-between items-center px-6 pb-4 border-b border-white/10">
+              <h2 className="text-white font-bold text-base">Seyahat Rehberi</h2>
+              <span className="bg-blue-500/20 text-blue-400 text-xs px-2 py-1 rounded-md font-bold">{visitedCountries.length} Ülke</span>
+            </div>
+            <div className="overflow-y-auto flex flex-col gap-2 p-4">
+              {visitedCountries.map(vc => (
+                <div key={vc.country_id} className="bg-white/5 rounded-xl border border-white/5 overflow-hidden">
+                  <button
+                    onClick={() => setExpandedCart(expandedCart === vc.country_id ? null : vc.country_id)}
+                    className="w-full text-left p-4 flex justify-between items-center"
+                  >
+                    <span className="text-sm font-bold text-white flex gap-2 items-center">
+                      {expandedCart === vc.country_id ? <ChevronDown size={14} className="text-blue-400" /> : <ChevronRight size={14} className="text-slate-500" />}
+                      {vc.country_name}
+                    </span>
+                    <span className="text-xs font-bold text-slate-300 bg-black/50 px-2 py-1 rounded-lg">{vc.cities.length} İl</span>
+                  </button>
+                  {expandedCart === vc.country_id && (
+                    <div className="px-5 pb-4 pt-1 flex flex-col gap-2 border-t border-white/5 bg-black/30">
+                      {vc.cities.map(city => (
+                        <div key={city} className="text-sm text-slate-400 pl-2 border-l-2 border-blue-400/50 py-1 font-semibold">{city}</div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===== MAP ===== */}
       <div className="w-full h-full z-0 bg-black">
-        <MapContainer 
-          center={[39.0, 35.0]} 
-          zoom={4} 
+        <MapContainer
+          center={[39.0, 35.0]}
+          zoom={window.innerWidth < 768 ? 2 : 4}
           zoomControl={false}
           className="w-full h-full outline-none bg-black"
           style={{ background: '#000000' }}
         >
-          {/* CartoDB Dark Matter No Labels - Sadece simisyah sular ve teknik kara */}
           <TileLayer
             url="https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png"
             attribution="&copy; OpenStreetMap &copy; CARTO"
           />
-          
           <MapController selectedBounds={selectedBounds} />
-
-          {/* Dünya GeoJSON Katmanı (Daima Arka Planda) */}
           {worldData && (
-            <GeoJSON 
+            <GeoJSON
               key="world-layer"
               ref={geoJsonWorldRef}
               data={worldData}
@@ -424,10 +480,8 @@ export default function App() {
               onEachFeature={onEachWorldFeature}
             />
           )}
-
-          {/* İl (Province) GeoJSON Katmanı (Sadece Ülke Seçilince Üste Biner) */}
           {provinceData && (
-            <GeoJSON 
+            <GeoJSON
               key={`province-${selectedCountry?.id}`}
               ref={geoJsonProvinceRef}
               data={provinceData}
@@ -438,179 +492,173 @@ export default function App() {
         </MapContainer>
       </div>
 
-      {/* Sağ Yan Panel Modal */}
+      {/* ===== MODAL (Desktop: right panel, Mobile: bottom sheet) ===== */}
       {isModalOpen && selectedCountry && selectedProvince && (
-        <div className="fixed top-0 right-0 h-full w-full sm:w-[450px] bg-slate-900 border-l border-white/10 shadow-[0_0_50px_rgba(0,0,0,0.8)] z-[2000] flex flex-col animate-[slideIn_0.3s_ease-out]">
-          <div className="p-6 flex justify-between items-center border-b border-white/5 bg-black/40">
-            <h2 className="text-2xl font-bold text-white flex flex-col">
-              <span className="text-xs font-semibold text-blue-400 mb-1 uppercase tracking-wider">{selectedCountry.name}</span>
-              <span className="flex items-center gap-2 drop-shadow-md"><MapPin className="text-emerald-400" /> {selectedProvince}</span>
-            </h2>
-            <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-white transition-colors bg-white/5 hover:bg-white/10 p-2 rounded-full border border-white/10">
-              <X size={20} />
-            </button>
-          </div>
+        <div className="fixed inset-0 z-[2000] flex flex-col sm:flex-row sm:justify-end">
+          {/* Backdrop - mobile only */}
+          <div className="absolute inset-0 bg-black/40 sm:hidden" onClick={() => setIsModalOpen(false)} />
 
-          <div className="flex px-6 pt-4 gap-4 bg-black/20">
-            <button 
-              className={`pb-3 border-b-2 transition-colors font-semibold uppercase tracking-wider text-xs ${activeTab === 'view' ? 'text-blue-400 border-blue-400' : 'text-slate-500 hover:text-slate-300 border-transparent'}`}
-              onClick={() => setActiveTab('view')}
-            >
-              Gezilen Yerler & Kolaj
-            </button>
-            <button 
-              className={`pb-3 border-b-2 transition-colors font-semibold uppercase tracking-wider text-xs ${activeTab === 'add' ? 'text-green-400 border-green-400' : 'text-slate-500 hover:text-slate-300 border-transparent'}`}
-              onClick={() => setActiveTab('add')}
-            >
-              <span className="flex items-center gap-2">Pini Zapt Et <Lock size={12}/></span>
-            </button>
-          </div>
+          {/* Panel */}
+          <div className="relative mt-auto sm:mt-0 w-full sm:w-[450px] sm:h-full bg-slate-900 border-t sm:border-t-0 sm:border-l border-white/10 shadow-2xl flex flex-col rounded-t-3xl sm:rounded-none"
+            style={{ maxHeight: '90dvh', paddingBottom: 'max(0px, env(safe-area-inset-bottom))' }}>
 
-          <div className="flex-1 overflow-y-auto p-6 scrollbar-thin scrollbar-thumb-slate-700">
-            {/* VIEW MODE */}
-            {activeTab === 'view' && (
-              <div className="flex flex-col gap-6">
-                
-                {/* Tüm Ülkenin Fotoğraf Kolajı */}
-                {countryImages.length > 0 && (
-                  <div className="mb-4">
-                    <h3 className="text-slate-400 text-xs font-bold mb-3 uppercase tracking-widest flex justify-between items-center border-b border-white/10 pb-2">
-                      <span>Bu Ülke Albümü</span>
-                      <span className="bg-white/10 text-[10px] py-1 px-2 rounded-lg">{countryImages.length} FOTO</span>
-                    </h3>
-                    
-                    {countryImages.length === 1 ? (
-                      <div className="rounded-xl overflow-hidden border border-white/10 shadow-2xl relative group">
-                        <img src={countryImages[0].url} className="w-full h-72 object-cover transition-transform group-hover:scale-105" alt="Anı" />
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent flex items-end p-5">
-                          <span className="text-white font-bold tracking-wide text-lg drop-shadow-md">{countryImages[0].city}</span>
+            {/* Drag handle - mobile only */}
+            <div className="flex justify-center pt-3 sm:hidden">
+              <div className="w-10 h-1 bg-white/20 rounded-full" />
+            </div>
+
+            {/* Header */}
+            <div className="p-5 sm:p-6 flex justify-between items-center border-b border-white/5 bg-black/40">
+              <h2 className="text-xl sm:text-2xl font-bold text-white flex flex-col">
+                <span className="text-xs font-semibold text-blue-400 mb-1 uppercase tracking-wider">{selectedCountry.name}</span>
+                <span className="flex items-center gap-2 drop-shadow-md"><MapPin className="text-emerald-400" size={18} /> {selectedProvince}</span>
+              </h2>
+              <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-white transition-colors bg-white/5 hover:bg-white/10 p-2.5 rounded-full border border-white/10 min-w-[44px] min-h-[44px] flex items-center justify-center">
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Tabs */}
+            <div className="flex px-5 sm:px-6 pt-4 gap-4 bg-black/20">
+              <button
+                className={`pb-3 border-b-2 transition-colors font-semibold uppercase tracking-wider text-xs min-h-[44px] ${activeTab === 'view' ? 'text-blue-400 border-blue-400' : 'text-slate-500 border-transparent'}`}
+                onClick={() => setActiveTab('view')}
+              >
+                Gezilen Yerler
+              </button>
+              <button
+                className={`pb-3 border-b-2 transition-colors font-semibold uppercase tracking-wider text-xs min-h-[44px] ${activeTab === 'add' ? 'text-green-400 border-green-400' : 'text-slate-500 border-transparent'}`}
+                onClick={() => setActiveTab('add')}
+              >
+                <span className="flex items-center gap-2">Pini Zapt Et <Lock size={12}/></span>
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="flex-1 overflow-y-auto p-5 sm:p-6 scrollbar-thin scrollbar-thumb-slate-700">
+              {activeTab === 'view' && (
+                <div className="flex flex-col gap-6">
+                  {countryImages.length > 0 && (
+                    <div className="mb-4">
+                      <h3 className="text-slate-400 text-xs font-bold mb-3 uppercase tracking-widest flex justify-between items-center border-b border-white/10 pb-2">
+                        <span>Bu Ülke Albümü</span>
+                        <span className="bg-white/10 text-[10px] py-1 px-2 rounded-lg">{countryImages.length} FOTO</span>
+                      </h3>
+                      {countryImages.length === 1 ? (
+                        <div className="rounded-xl overflow-hidden border border-white/10 shadow-2xl relative group">
+                          <img src={countryImages[0].url} className="w-full h-60 object-cover" alt="Anı" />
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent flex items-end p-5">
+                            <span className="text-white font-bold text-lg">{countryImages[0].city}</span>
+                          </div>
                         </div>
+                      ) : (
+                        <div className="grid grid-cols-2 gap-3">
+                          {countryImages.map((img, idx) => (
+                            <div key={idx} className={`rounded-xl overflow-hidden border border-white/10 shadow-xl relative group ${idx === 0 && countryImages.length % 2 !== 0 ? 'col-span-2 h-44' : 'h-36'}`}>
+                              <img src={img.url} className="w-full h-full object-cover" alt="Anı" />
+                              <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 to-transparent p-3">
+                                <span className="text-white text-xs font-bold">{img.city}</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  <div className="mt-2">
+                    <h3 className="text-slate-400 text-xs font-bold mb-3 uppercase tracking-widest border-b border-white/10 pb-2">{selectedProvince} Log Kaydı</h3>
+                    {countryPlaces.filter(p => p.city === selectedProvince).length === 0 ? (
+                      <div className="bg-black/40 rounded-xl p-8 text-center border border-white/5">
+                        <p className="text-slate-500 text-sm mb-4">Bu koordinat için aktif bir veri bulunamadı.</p>
+                        <button onClick={() => setActiveTab('add')} className="text-blue-400 font-bold text-xs uppercase tracking-wider border border-blue-500/30 px-4 py-3 rounded-lg bg-blue-500/10 min-h-[44px]">Sisteme Giriş Yap</button>
                       </div>
                     ) : (
-                      <div className="grid grid-cols-2 gap-3">
-                        {countryImages.map((img, idx) => (
-                          <div key={idx} className={`rounded-xl overflow-hidden border border-white/10 shadow-xl relative group ${idx === 0 && countryImages.length % 2 !== 0 ? 'col-span-2 h-48' : 'h-36'}`}>
-                            <img src={img.url} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" alt="Anı" />
-                            <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 to-transparent p-3 pointer-events-none">
-                              <span className="text-white text-xs font-bold drop-shadow-lg">{img.city}</span>
-                            </div>
+                      <div className="flex flex-col gap-4">
+                        {countryPlaces.filter(p => p.city === selectedProvince).map((place, idx) => (
+                          <div key={idx} className="bg-gradient-to-br from-slate-800 to-black rounded-xl border border-white/10 p-5 flex flex-col gap-3 relative shadow-2xl">
+                            <div className="absolute top-5 right-5 w-4 h-4 rounded-full border-2 border-slate-900" style={{ backgroundColor: place.color }}></div>
+                            <h3 className="text-lg font-bold text-white">{place.city}</h3>
+                            {place.note && (
+                              <p className="text-slate-300 text-sm mt-1 bg-black/60 p-4 rounded-xl border border-white/5 leading-relaxed">{place.note}</p>
+                            )}
                           </div>
                         ))}
                       </div>
                     )}
                   </div>
-                )}
-
-                {/* Sadece Tıklanan İlin Bilgisi */}
-                <div className="mt-2">
-                  <h3 className="text-slate-400 text-xs font-bold mb-3 uppercase tracking-widest border-b border-white/10 pb-2">{selectedProvince} Log Kaydı</h3>
-                  {countryPlaces.filter(p => p.city === selectedProvince).length === 0 ? (
-                    <div className="bg-black/40 rounded-xl p-8 text-center border border-white/5 shadow-inner">
-                      <p className="text-slate-500 text-sm mb-4">Bu koordinat için aktif bir veri bulunamadı.</p>
-                      <button onClick={() => setActiveTab('add')} className="text-blue-400 font-bold text-xs uppercase tracking-wider hover:text-blue-300 transition-colors border border-blue-500/30 px-4 py-2 rounded-lg bg-blue-500/10">Sisteme Giriş Yap</button>
-                    </div>
-                  ) : (
-                    <div className="flex flex-col gap-4">
-                      {countryPlaces.filter(p => p.city === selectedProvince).map((place, idx) => (
-                        <div key={idx} className="bg-gradient-to-br from-slate-800 to-black rounded-xl border border-white/10 p-5 flex flex-col gap-3 relative shadow-2xl">
-                          <div className="absolute top-5 right-5 w-4 h-4 rounded-full shadow-[0_0_15px_rgba(255,255,255,0.2)] border-2 border-slate-900" style={{ backgroundColor: place.color }}></div>
-                          <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                            {place.city}
-                          </h3>
-                          {place.note && (
-                            <p className="text-slate-300 text-sm mt-1 bg-black/60 p-4 rounded-xl border border-white/5 shadow-inner leading-relaxed">{place.note}</p>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  )}
                 </div>
+              )}
 
-              </div>
-            )}
-
-            {/* ADD MODE */}
-            {activeTab === 'add' && (
-              <form onSubmit={handleSubmit} className="flex flex-col gap-6">
-                <div className="bg-blue-500/10 border border-blue-500/20 p-5 rounded-xl flex items-start gap-4 shadow-inner">
-                  <div className="bg-blue-500/20 p-2 rounded-lg">
-                    <Lock className="text-blue-400" size={20} />
+              {activeTab === 'add' && (
+                <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+                  <div className="bg-blue-500/10 border border-blue-500/20 p-4 rounded-xl flex items-start gap-4">
+                    <div className="bg-blue-500/20 p-2 rounded-lg shrink-0">
+                      <Lock className="text-blue-400" size={20} />
+                    </div>
+                    <div>
+                      <h4 className="text-blue-400 font-bold text-xs uppercase tracking-wider">Geliştirici Şifresi</h4>
+                      <p className="text-xs text-blue-200 mt-1 leading-relaxed opacity-80">Bu lokasyonu sisteme işlemek kod korumalıdır.</p>
+                    </div>
                   </div>
                   <div>
-                    <h4 className="text-blue-400 font-bold text-xs uppercase tracking-wider">Geliştirici Şifresi ("test")</h4>
-                    <p className="text-xs text-blue-200 mt-1 leading-relaxed opacity-80">Bu lokasyonu sisteme işlemek ve renklendirmek kod korumalıdır.</p>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-400 mb-2 uppercase tracking-wide">Erişim Şifresi <span className="text-rose-500">*</span></label>
-                  <input 
-                    type="password" 
-                    required
-                    className="w-full p-4 bg-black/50 border border-white/10 text-white rounded-xl focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all placeholder:text-slate-600"
-                    value={formData.password}
-                    onChange={(e) => setFormData({...formData, password: e.target.value})}
-                    placeholder="Şifre (test)"
-                  />
-                </div>
-
-                <hr className="border-white/5 my-1" />
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-400 mb-2 uppercase tracking-wide">Durum Notu</label>
-                  <textarea 
-                    rows={4}
-                    className="w-full p-4 bg-black/50 border border-white/10 text-white rounded-xl focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all placeholder:text-slate-600 resize-none"
-                    value={formData.note}
-                    onChange={(e) => setFormData({...formData, note: e.target.value})}
-                    placeholder="Görev/Gezi detayları..."
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-400 mb-3 uppercase tracking-wide">Harita Boyama Rengi <span className="text-rose-500">*</span></label>
-                  <div className="flex gap-4 bg-black/40 p-4 rounded-xl border border-white/5 justify-center shadow-inner">
-                    {PASTEL_COLORS.map(color => (
-                      <button
-                        key={color}
-                        type="button"
-                        className={`w-10 h-10 rounded-full transition-all flex items-center justify-center ${formData.color === color ? 'ring-4 ring-white/50 scale-125 shadow-[0_0_20px_rgba(255,255,255,0.2)] z-10' : 'ring-2 ring-transparent opacity-60 hover:opacity-100 hover:scale-110'}`}
-                        style={{ backgroundColor: color }}
-                        onClick={() => setFormData({...formData, color})}
-                      />
-                    ))}
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-400 mb-2 uppercase tracking-wide">Saha Görseli (Opsiyonel)</label>
-                  <div className="border border-dashed border-white/20 bg-black/30 rounded-xl p-8 flex flex-col items-center justify-center cursor-pointer hover:bg-black/50 hover:border-blue-500/50 transition-all group">
-                    <input 
-                      type="file" 
-                      accept="image/*"
-                      className="hidden" 
-                      id="imageUpload"
-                      onChange={(e) => setFormData({...formData, file: e.target.files?.[0] || null})}
+                    <label className="block text-xs font-bold text-slate-400 mb-2 uppercase tracking-wide">Erişim Şifresi <span className="text-rose-500">*</span></label>
+                    <input
+                      type="password"
+                      required
+                      className="w-full p-4 bg-black/50 border border-white/10 text-white rounded-xl focus:border-blue-500 outline-none transition-all placeholder:text-slate-600 text-base"
+                      value={formData.password}
+                      onChange={(e) => setFormData({...formData, password: e.target.value})}
+                      placeholder="Şifre"
                     />
-                    <label htmlFor="imageUpload" className="cursor-pointer flex flex-col items-center w-full">
-                      <div className="bg-white/5 p-4 rounded-full mb-3 group-hover:bg-blue-500/10 transition-colors">
-                        <ImageIcon className="text-slate-500 group-hover:text-blue-400" size={28} />
-                      </div>
-                      <span className="text-xs font-bold text-slate-500 group-hover:text-slate-300 text-center uppercase tracking-wide">
-                        {formData.file ? formData.file.name : 'Dosya Seç (Kolaj İçin Gerekli)'}
-                      </span>
-                    </label>
                   </div>
-                </div>
-
-                <button 
-                  type="submit"
-                  className="w-full mt-4 p-4 rounded-xl bg-blue-600 text-white font-extrabold text-sm uppercase tracking-widest hover:bg-blue-500 shadow-[0_0_30px_rgba(37,99,235,0.3)] transition-all flex justify-center items-center gap-3"
-                >
-                  Sisteme İşle
-                </button>
-              </form>
-            )}
+                  <hr className="border-white/5" />
+                  <div>
+                    <label className="block text-xs font-bold text-slate-400 mb-2 uppercase tracking-wide">Durum Notu</label>
+                    <textarea
+                      rows={4}
+                      className="w-full p-4 bg-black/50 border border-white/10 text-white rounded-xl focus:border-blue-500 outline-none transition-all placeholder:text-slate-600 resize-none text-base"
+                      value={formData.note}
+                      onChange={(e) => setFormData({...formData, note: e.target.value})}
+                      placeholder="Görev/Gezi detayları..."
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-400 mb-3 uppercase tracking-wide">Harita Boyama Rengi <span className="text-rose-500">*</span></label>
+                    <div className="flex gap-4 bg-black/40 p-4 rounded-xl border border-white/5 justify-center">
+                      {PASTEL_COLORS.map(color => (
+                        <button
+                          key={color}
+                          type="button"
+                          className={`w-11 h-11 rounded-full transition-all ${formData.color === color ? 'ring-4 ring-white/50 scale-125 shadow-[0_0_20px_rgba(255,255,255,0.2)]' : 'ring-2 ring-transparent opacity-60'}`}
+                          style={{ backgroundColor: color }}
+                          onClick={() => setFormData({...formData, color})}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-400 mb-2 uppercase tracking-wide">Saha Görseli (Opsiyonel)</label>
+                    <div className="border border-dashed border-white/20 bg-black/30 rounded-xl p-8 flex flex-col items-center justify-center">
+                      <input type="file" accept="image/*" className="hidden" id="imageUpload" onChange={(e) => setFormData({...formData, file: e.target.files?.[0] || null})} />
+                      <label htmlFor="imageUpload" className="cursor-pointer flex flex-col items-center w-full">
+                        <div className="bg-white/5 p-4 rounded-full mb-3">
+                          <ImageIcon className="text-slate-500" size={28} />
+                        </div>
+                        <span className="text-xs font-bold text-slate-500 text-center uppercase tracking-wide">
+                          {formData.file ? formData.file.name : 'Dosya Seç'}
+                        </span>
+                      </label>
+                    </div>
+                  </div>
+                  <button
+                    type="submit"
+                    className="w-full mt-2 p-4 rounded-xl bg-blue-600 text-white font-extrabold text-sm uppercase tracking-widest hover:bg-blue-500 transition-all min-h-[52px]"
+                  >
+                    Sisteme İşle
+                  </button>
+                </form>
+              )}
+            </div>
           </div>
         </div>
       )}
