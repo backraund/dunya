@@ -86,20 +86,22 @@ export default function App() {
   }, [places]);
 
   useEffect(() => {
-    // Backend API'den ortak veriyi çek (Tüm cihazlar aynı veriyi görsün)
+    // 1. ÖNCE localforage'dan anlık yükle (F5'te kayıp yok!)
+    localforage.getItem<Place[]>('places_db').then(cached => {
+      if (cached && cached.length > 0) {
+        setPlaces(cached);
+      }
+    });
+
+    // 2. ARKA PLANDA backend sync (backend çalışıyorsa veriyi güncelle)
     axios.get('/api/places')
       .then(res => {
         if (res.data && res.data.length > 0) {
           setPlaces(res.data);
-          localforage.setItem('places_db', res.data); // Offline cache güncelle
+          localforage.setItem('places_db', res.data); // Cache güncelle
         }
       })
-      .catch(() => {
-        // İnternet yoksa yerel cache'i kullan
-        localforage.getItem<Place[]>('places_db').then(data => {
-          if (data && data.length > 0) setPlaces(data);
-        });
-      });
+      .catch(() => { /* Backend down - localforage yeterli */ });
 
     // Localden tüm dünyanın ülke haritasını çekelim
     axios.get('/geo/world.geojson')
