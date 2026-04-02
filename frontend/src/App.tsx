@@ -60,6 +60,12 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<'view' | 'add'>('view');
   const [expandedCart, setExpandedCart] = useState<string | null>(null);
   const [isCartOpen, setIsCartOpen] = useState(false);
+  const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
+
+  const showToast = (msg: string, type: 'success' | 'error' = 'success') => {
+    setToast({ msg, type });
+    setTimeout(() => setToast(null), 2500);
+  };
   
   const [formData, setFormData] = useState({
     color: PASTEL_COLORS[0],
@@ -80,22 +86,27 @@ export default function App() {
   }, [places]);
 
   useEffect(() => {
-    // Veritabanından eski kayıtları çek
-    localforage.getItem<Place[]>('places_db').then(data => {
-      if (data && data.length > 0) {
-        setPlaces(data);
-      }
-    }).catch(err => console.error("DB Load Error:", err));
-
-    // Localden tüm dünyanın ülke haritasını çekelim (Kendi sunucumuzdan 0ms gecikme)
-    axios.get('/geo/world.geojson')
+    // Backend API'den ortak veriyi çek (Tüm cihazlar aynı veriyi görsün)
+    axios.get('/api/places')
       .then(res => {
-        setWorldData(res.data);
-      }).catch(err => {
-        console.error("Local world data missing! Start the download script.", err);
+        if (res.data && res.data.length > 0) {
+          setPlaces(res.data);
+          localforage.setItem('places_db', res.data); // Offline cache güncelle
+        }
+      })
+      .catch(() => {
+        // İnternet yoksa yerel cache'i kullan
+        localforage.getItem<Place[]>('places_db').then(data => {
+          if (data && data.length > 0) setPlaces(data);
+        });
       });
 
-    // Harf bozulmaları olan dünya geneli illeri onarmak için Global Sözlüğü yükle
+    // Localden tüm dünyanın ülke haritasını çekelim
+    axios.get('/geo/world.geojson')
+      .then(res => setWorldData(res.data))
+      .catch(err => console.error("Local world data missing!", err));
+
+    // Harf bozulmaları için Global Sözlüğü yükle
     axios.get('/geo/states.json')
       .then(res => setGlobalStates(res.data))
       .catch(err => console.error("Global states mappings missing.", err));
@@ -261,13 +272,13 @@ export default function App() {
     if (!selectedCountry || !selectedProvince) return;
 
     if (formData.password !== "test") {
-      alert("Hatalı Şifre! Yetkili şifresi 'test' olarak tanımlanmıştır.");
+      showToast("Yanlış şifre!", 'error');
       return;
     }
 
     try {
-      // Resmi Base64 string'ine kodla (Veritabanında sonsuza dek kalması için)
-      let b64Image = undefined;
+      // Resmi Base64'e kodla
+      let b64Image: string | undefined = undefined;
       if (formData.file) {
         const reader = new FileReader();
         b64Image = await new Promise<string>((resolve, reject) => {
@@ -286,19 +297,35 @@ export default function App() {
         note: formData.note,
         imageUrl: b64Image
       };
-      
-      const updatedPlaces = [...places, newPlace];
-      setPlaces(updatedPlaces);
-      
-      // IndexedDB (NoSQL) sistemine yaz!
-      await localforage.setItem('places_db', updatedPlaces);
-      
-      alert("Dunya DB'ye Mühürlendi! Artık sayfayı yenilesen de silinmeyecek.");
+
+      // Backend API'ye gönder (MongoDB - tüm cihazlarda görünsün)
+      try {
+        const fd = new FormData();
+        fd.append('country_id', newPlace.country_id);
+        fd.append('country_name', newPlace.country_name);
+        fd.append('city', newPlace.city);
+        fd.append('color', newPlace.color);
+        fd.append('password', formData.password);
+        if (formData.note) fd.append('note', formData.note);
+        if (formData.file) fd.append('file', formData.file);
+        const res = await axios.post('/api/places', fd);
+        const savedPlace = { ...newPlace, ...res.data };
+        const updatedPlaces = [...places, savedPlace];
+        setPlaces(updatedPlaces);
+        localforage.setItem('places_db', updatedPlaces);
+      } catch {
+        // Backend çalışmıyorsa yerel kaydet
+        const updatedPlaces = [...places, newPlace];
+        setPlaces(updatedPlaces);
+        localforage.setItem('places_db', updatedPlaces);
+      }
+
+      showToast(`${selectedProvince} haritaya işlendi! ✓`);
       setActiveTab('view');
-      setFormData(prev => ({...prev, note: '', file: null}));
+      setFormData(prev => ({...prev, note: '', file: null, password: ''}));
     } catch (err) {
       console.error("DB Error", err);
-      alert("Veritabanına işlenirken bir hata oluştu.");
+      showToast("Bir hata oluştu.", 'error');
     }
   };
 
@@ -321,6 +348,19 @@ export default function App() {
 
   return (
     <div className="relative w-full bg-black text-slate-200 font-sans overflow-hidden" style={{ height: '100dvh' }}>
+
+      {/* ===== TOAST NOTIFICATION ===== */}
+      {toast && (
+        <div className={`fixed bottom-8 left-1/2 -translate-x-1/2 z-[9999] px-5 py-3 rounded-2xl shadow-2xl border flex items-center gap-3 animate-[fadeInUp_0.3s_ease-out] backdrop-blur-xl transition-all ${
+          toast.type === 'success'
+            ? 'bg-emerald-900/90 border-emerald-500/40 text-emerald-100'
+            : 'bg-rose-900/90 border-rose-500/40 text-rose-100'
+        }`}
+          style={{ animation: 'fadeInUp 0.3s ease-out' }}>
+          <span className="text-lg">{toast.type === 'success' ? '✅' : '❌'}</span>
+          <span className="font-semibold text-sm whitespace-nowrap">{toast.msg}</span>
+        </div>
+      )}
 
       {/* ===== MOBILE TOP BAR ===== */}
       <div className="md:hidden absolute top-0 left-0 right-0 z-[1000] flex items-center justify-between px-4 py-3 bg-black/70 backdrop-blur-xl border-b border-white/10"

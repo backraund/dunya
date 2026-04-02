@@ -98,23 +98,26 @@ async def create_place(
     color: str = Form(...),
     note: str = Form(None),
     password: str = Form(...),
+    imageUrl: str = Form(None),
     file: UploadFile = File(None)
 ):
     if password != ADMIN_PASSWORD:
-        raise HTTPException(status_code=403, detail="Hatalı Şifre! Sadece yetkili kişi yer ekleyebilir.")
+        raise HTTPException(status_code=403, detail="Hatalı Şifre!")
 
-    image_url = None
+    image_url = imageUrl  # Base64 data URL olarak sakla
     if file and file.filename:
-        file_ext = file.filename.split(".")[-1]
-        file_name = f"{uuid.uuid4()}.{file_ext}"
-        s3_client.upload_fileobj(
-            file.file, 
-            BUCKET_NAME, 
-            file_name,
-            ExtraArgs={"ContentType": file.content_type}
-        )
-        # Eğer Docker ile localde test ediyorken resmi dışarıdan görüntülemek gerekirse diye:
-        image_url = f"{MINIO_ENDPOINT}/{BUCKET_NAME}/{file_name}"
+        try:
+            file_ext = file.filename.split(".")[-1]
+            file_name = f"{uuid.uuid4()}.{file_ext}"
+            s3_client.upload_fileobj(
+                file.file, BUCKET_NAME, file_name,
+                ExtraArgs={"ContentType": file.content_type}
+            )
+            image_url = f"{MINIO_ENDPOINT}/{BUCKET_NAME}/{file_name}"
+        except Exception as e:
+            print("MinIO upload error:", e)
+            # MinIO hata verse bile base64'e başvur
+            pass
         
     place_doc = {
         "country_id": country_id,
