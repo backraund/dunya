@@ -6,16 +6,14 @@ interface Props {
   onClose: () => void;
   darkMode: boolean;
   onToggleDark: () => void;
+  showPhotoMap: boolean;
+  onTogglePhotoMap: () => void;
+  onExport: () => void;
 }
 
-export default function SettingsModal({ onClose, darkMode, onToggleDark }: Props) {
+export default function SettingsModal({ onClose, darkMode, onToggleDark, showPhotoMap, onTogglePhotoMap, onExport }: Props) {
   const { user, logout } = useAuth();
   const { t, lang, setLang } = useI18n();
-
-  const handleExport = () => {
-    onClose();
-    setTimeout(() => window.print(), 300);
-  };
 
   const handleLogout = () => {
     logout();
@@ -85,6 +83,23 @@ export default function SettingsModal({ onClose, darkMode, onToggleDark }: Props
               </div>
             </button>
 
+            {/* Photo Map Overlay */}
+            <button
+              onClick={onTogglePhotoMap}
+              className="w-full flex items-center justify-between p-4 bg-black/40 border border-white/5 rounded-2xl hover:bg-white/5 transition-colors mb-3"
+            >
+              <div className="flex items-center gap-3">
+                <Camera size={18} className="text-indigo-400" />
+                <div className="text-left">
+                  <p className="text-white text-sm font-semibold">Fotoğraf Kolajı Görünümü</p>
+                  <p className="text-slate-500 text-xs">Gezdiğin yerleri fotoğraflarınla doldur</p>
+                </div>
+              </div>
+              <div className={`w-11 h-6 rounded-full transition-colors flex items-center px-0.5 ${showPhotoMap ? 'bg-indigo-600' : 'bg-slate-700'}`}>
+                <div className={`w-5 h-5 bg-white rounded-full shadow-lg transition-transform ${showPhotoMap ? 'translate-x-5' : 'translate-x-0'}`} />
+              </div>
+            </button>
+
             {/* Language */}
             <div className="w-full flex items-center justify-between p-4 bg-black/40 border border-white/5 rounded-2xl">
               <div className="flex items-center gap-3">
@@ -114,7 +129,7 @@ export default function SettingsModal({ onClose, darkMode, onToggleDark }: Props
               <Shield size={11} /> {t.dataPrivacy}
             </p>
             <button
-              onClick={handleExport}
+              onClick={onExport}
               className="w-full flex items-center gap-3 p-4 bg-black/40 border border-white/5 rounded-2xl hover:bg-white/5 transition-colors text-left"
             >
               <Camera size={18} className="text-purple-400" />

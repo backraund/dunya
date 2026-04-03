@@ -18,6 +18,7 @@ interface TimelineEvent {
 interface Props {
   onClose: () => void;
   showPartner: boolean;
+  onFocus?: (countryId: string, city?: string) => void;
 }
 
 function formatDate(iso: string) {
@@ -25,33 +26,65 @@ function formatDate(iso: string) {
   return d.toLocaleDateString('tr-TR', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
-export default function TimelineModal({ onClose, showPartner }: Props) {
+export default function TimelineModal({ onClose, showPartner, onFocus }: Props) {
   const { token } = useAuth();
   const { t } = useI18n();
   const [events, setEvents] = useState<TimelineEvent[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedIndex, setSelectedIndex] = useState<number>(-1);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const itemRefs = useRef<(HTMLDivElement | null)[]>([]);
 
   useEffect(() => {
     axios.get('/api/timeline', {
       headers: { Authorization: `Bearer ${token}` },
       params: { include_partner: showPartner, limit: 100 },
     }).then(r => {
-      setEvents(r.data.reverse()); // oldest first for timeline
+      setEvents(r.data.reverse()); // oldest first
     }).catch(console.error)
       .finally(() => setLoading(false));
   }, [showPartner]);
+
+  // Keyboard navigation
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (events.length === 0) return;
+      if (e.key === 'ArrowRight') {
+        setSelectedIndex(prev => {
+          const next = prev < events.length - 1 ? prev + 1 : prev;
+          focusIndex(next);
+          return next;
+        });
+      } else if (e.key === 'ArrowLeft') {
+        setSelectedIndex(prev => {
+          const next = prev > 0 ? prev - 1 : prev;
+          focusIndex(next);
+          return next;
+        });
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [events]);
+
+  const focusIndex = (idx: number) => {
+    if (idx >= 0 && idx < events.length) {
+      itemRefs.current[idx]?.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+      const ev = events[idx];
+      if (ev.country_id && onFocus) onFocus(ev.country_id, ev.city);
+    }
+  };
 
   const scrollLeft = () => scrollRef.current?.scrollBy({ left: -200, behavior: 'smooth' });
   const scrollRight = () => scrollRef.current?.scrollBy({ left: 200, behavior: 'smooth' });
 
   return (
-    <div className="fixed inset-0 z-[3000] flex flex-col justify-end" style={{ minHeight: '100dvh' }}>
-      <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={onClose} />
+    <div className="fixed inset-0 z-[3000] flex flex-col justify-end pointer-events-none" style={{ minHeight: '100dvh' }}>
+      <div className="absolute inset-0 bg-transparent disabled:pointer-events-none" onClick={onClose} />
 
       {/* Timeline panel — slides up from bottom like Fusion 360 */}
       <div
-        className="relative bg-slate-950 border-t border-white/10 shadow-2xl w-full"
+        className="relative bg-slate-950/90 backdrop-blur-xl border-t border-white/10 shadow-2xl w-full pointer-events-auto"
         style={{ paddingBottom: 'max(16px,env(safe-area-inset-bottom))' }}
       >
         {/* Drag handle */}
@@ -104,7 +137,12 @@ export default function TimelineModal({ onClose, showPartner }: Props) {
               </div>
             ) : (
               events.map((ev, i) => (
-                <div key={ev.id || i} className="flex flex-col items-center gap-2 min-w-[120px] relative">
+                <div 
+                  key={ev.id || i} 
+                  ref={el => itemRefs.current[i] = el}
+                  className={`flex flex-col items-center gap-2 min-w-[120px] relative cursor-pointer transition-transform ${selectedIndex === i ? 'scale-110' : 'opacity-70 hover:opacity-100'}`}
+                  onClick={() => { setSelectedIndex(i); focusIndex(i); }}
+                >
                   {/* Date above */}
                   <div className="text-[10px] text-slate-500 font-bold text-center leading-tight">
                     {formatDate(ev.created_at)}
@@ -112,13 +150,13 @@ export default function TimelineModal({ onClose, showPartner }: Props) {
 
                   {/* Connector dot */}
                   <div
-                    className="w-4 h-4 rounded-full border-2 border-slate-900 z-10 shadow-lg flex-shrink-0"
+                    className={`w-4 h-4 rounded-full border-2 border-slate-900 z-10 shadow-lg flex-shrink-0 transition-all ${selectedIndex === i ? 'w-5 h-5 ring-4 ring-blue-500/50' : ''}`}
                     style={{ backgroundColor: ev.color || '#3b82f6' }}
                   />
 
                   {/* Card */}
                   <div
-                    className="bg-slate-900 border border-white/10 rounded-xl p-3 w-full text-center shadow-xl"
+                    className={`bg-slate-900 border border-white/10 rounded-xl p-3 w-full text-center shadow-xl transition-all ${selectedIndex === i ? 'shadow-blue-500/20 shadow-2xl' : ''}`}
                     style={{ borderTopColor: ev.color || '#3b82f6', borderTopWidth: 2 }}
                   >
                     <div className="flex items-center justify-center gap-1 mb-1">

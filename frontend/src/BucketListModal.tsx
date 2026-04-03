@@ -26,6 +26,8 @@ export default function BucketListModal({ onClose, selectedCountry, selectedCity
   const [loading, setLoading] = useState(true);
   const [addMode, setAddMode] = useState(false);
   const [note, setNote] = useState('');
+  const [manualCountry, setManualCountry] = useState('');
+  const [manualCity, setManualCity] = useState('');
   const [msg, setMsg] = useState('');
 
   const headers = { Authorization: `Bearer ${token}` };
@@ -38,12 +40,13 @@ export default function BucketListModal({ onClose, selectedCountry, selectedCity
   }, []);
 
   const addItem = async () => {
-    if (!selectedCountry) { setMsg('Önce haritadan bir ülke/şehir seç'); return; }
+    const reqCountryName = selectedCountry ? selectedCountry.name : manualCountry.trim();
+    if (!reqCountryName) { setMsg('Önce haritadan bir ülke seç veya adını yaz'); return; }
     try {
       const fd = new FormData();
-      fd.append('country_id', selectedCountry.id);
-      fd.append('country_name', selectedCountry.name);
-      if (selectedCity) fd.append('city', selectedCity);
+      fd.append('country_id', selectedCountry ? selectedCountry.id : 'MANUAL');
+      fd.append('country_name', reqCountryName);
+      if (selectedCity || manualCity) fd.append('city', selectedCity || manualCity.trim());
       if (note) fd.append('note', note);
       const res = await axios.post('/api/bucket', fd, { headers });
       setItems(prev => [...prev, res.data]);
@@ -104,7 +107,22 @@ export default function BucketListModal({ onClose, selectedCountry, selectedCity
                 <MapPin size={14} /> {selectedCity || selectedCountry.name}
               </p>
             ) : (
-              <p className="text-slate-500 text-sm">Haritadan bir yer seç, sonra buraya ekle</p>
+              <div className="flex flex-col gap-2">
+                <input
+                  type="text"
+                  placeholder="Ülke Adı (Örn: İtalya)"
+                  className="w-full p-2 bg-black/50 border border-amber-500/30 text-white rounded-lg text-sm outline-none focus:border-amber-500 placeholder:text-slate-500"
+                  value={manualCountry}
+                  onChange={e => setManualCountry(e.target.value)}
+                />
+                <input
+                  type="text"
+                  placeholder="Şehir Adı (İsteğe bağlı)"
+                  className="w-full p-2 bg-black/50 border border-amber-500/30 text-white rounded-lg text-sm outline-none focus:border-amber-500 placeholder:text-slate-500"
+                  value={manualCity}
+                  onChange={e => setManualCity(e.target.value)}
+                />
+              </div>
             )}
             <textarea
               rows={2}
@@ -115,7 +133,7 @@ export default function BucketListModal({ onClose, selectedCountry, selectedCity
             />
             <button
               onClick={addItem}
-              disabled={!selectedCountry}
+              disabled={!selectedCountry && !manualCountry.trim()}
               className="w-full py-3 bg-amber-600 hover:bg-amber-500 text-white font-bold text-sm rounded-xl transition-colors disabled:opacity-40 min-h-[44px]"
             >
               {t.addBucket}

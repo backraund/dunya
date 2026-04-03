@@ -154,12 +154,15 @@ interface I18nContextType {
 const I18nContext = createContext<I18nContextType>(null!);
 
 export function I18nProvider({ children }: { children: React.ReactNode }) {
-  const [lang, setLangState] = useState<Lang>(
-    () => (localStorage.getItem('dunya_lang') as Lang) || 'tr'
-  );
+  const [lang, setLangState] = useState<Lang>(() => {
+    const l = (localStorage.getItem('dunya_lang') as Lang) || 'tr';
+    document.documentElement.lang = l;
+    return l;
+  });
 
   const setLang = (l: Lang) => {
     localStorage.setItem('dunya_lang', l);
+    document.documentElement.lang = l;
     setLangState(l);
   };
 

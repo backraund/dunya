@@ -61,8 +61,8 @@ export default function App() {
   const authHeaders = { Authorization: `Bearer ${token}` };
   const cacheKey = `places_db_${user?.username || 'guest'}`;
   const hiddenKey = `hidden_ids_${user?.username || 'guest'}`;
-  const onboardingKey = `dunya_onboarded_${user?.username}`;
   const [darkMode, setDarkMode] = useState(() => localStorage.getItem('dunya_dark') !== 'false');
+  const [showPhotoMap, setShowPhotoMap] = useState(() => localStorage.getItem('dunya_photo_map') !== 'false');
 
   const [places, setPlaces] = useState<Place[]>([]);
   const [worldData, setWorldData] = useState<any>(null);
@@ -98,8 +98,9 @@ export default function App() {
 
   useEffect(() => {
     localStorage.setItem('dunya_dark', String(darkMode));
+    localStorage.setItem('dunya_photo_map', String(showPhotoMap));
     document.documentElement.classList.toggle('dark', darkMode);
-  }, [darkMode]);
+  }, [darkMode, showPhotoMap]);
 
   useEffect(() => {
     if (user?.username) {
@@ -133,7 +134,7 @@ export default function App() {
     placesRef.current = places;
     if (geoJsonWorldRef.current) geoJsonWorldRef.current.setStyle(getWorldStyle);
     if (geoJsonProvinceRef.current) geoJsonProvinceRef.current.setStyle(getProvinceStyle);
-  }, [places]);
+  }, [places, showPhotoMap, darkMode, hiddenIds]);
 
   useEffect(() => {
     if (!token) return;
@@ -250,6 +251,43 @@ export default function App() {
     setIsModalOpen(false);
   };
 
+  const handleTimelineFocus = (countryId: string, city?: string) => {
+    if (!worldData || !geoJsonWorldRef.current) return;
+    const layers = geoJsonWorldRef.current.getLayers();
+    const layer = layers.find((l: any) => {
+      let iso = l.feature.properties['ISO3166-1-Alpha-3'];
+      if (l.feature.properties.name === 'Northern Cyprus') iso = 'TRNC';
+      return iso === countryId;
+    });
+    if (layer && layer.getBounds) {
+      setSelectedBounds(layer.getBounds());
+    }
+  };
+
+  const handleExportMap = () => {
+    setShowSettingsModal(false);
+    if (placesRef.current.length > 0 && geoJsonWorldRef.current) {
+      const layers = geoJsonWorldRef.current.getLayers();
+      const boundsList = layers
+         .filter((l: any) => {
+           let iso = l.feature.properties['ISO3166-1-Alpha-3'];
+           if (l.feature.properties.name === "Northern Cyprus") iso = "TRNC";
+           return placesRef.current.some(p => p.country_id === iso);
+         })
+         .map((l: any) => l.getBounds && l.getBounds())
+         .filter(Boolean);
+      
+      if (boundsList.length > 0) {
+         let allBounds = boundsList[0];
+         for(let i=1; i<boundsList.length; i++) allBounds.extend(boundsList[i]);
+         setSelectedBounds(allBounds);
+      }
+    }
+    setTimeout(() => {
+       window.print();
+    }, 1500);
+  };
+
   const getPlaceColor = (countryId: string, shapeName: string) => {
     // hiddenIds ref'e erişemiyoruz, ama snapshot alabiliyoruz
     const place = placesRef.current.find(p => p.country_id === countryId && p.city === shapeName);
@@ -300,21 +338,27 @@ export default function App() {
     let iso = feature.properties['ISO3166-1-Alpha-3'];
     if (feature.properties.name === 'Northern Cyprus') iso = 'TRNC';
 
+    const placeWithImg = showPhotoMap ? placesRef.current.find(p => p.country_id === iso && p.imageUrl && !hiddenIds.has(p.id)) : null;
     const cColor = getCountryColor(iso);
+    const hasImage = !!placeWithImg;
+
     return {
-      fillColor: cColor || "#0a0a0c", 
-      fillOpacity: cColor ? 0.3 : 0.8, // Gezilen ülkeler hafif parlar
-      color: "#27272a", // İnce ülke detayları
+      fillColor: hasImage ? `url(#pattern-${placeWithImg.id})` : (cColor || (darkMode ? "#0a0a0c" : "#f1f5f9")), 
+      fillOpacity: hasImage ? 1 : (cColor ? 0.6 : 0.8), // Gezilen ülkeler hafif parlar
+      color: darkMode ? "#27272a" : "#cbd5e1", // İnce ülke detayları
       weight: cColor ? 2 : 0.5
     };
   };
 
   const getProvinceStyle = (feature: any) => {
-    const pColor = getPlaceColor(selectedCountry?.id || "", getProvinceName(feature));
+    const pName = getProvinceName(feature);
+    const place = placesRef.current.find(p => p.country_id === selectedCountry?.id && p.city === pName);
+    const hasImage = showPhotoMap && place && place.imageUrl && !hiddenIds.has(place.id);
+
     return {
-      fillColor: pColor || "#000",
-      fillOpacity: pColor ? 0.8 : 0.2, // Boyanmamış iller transparan
-      color: "#38bdf8", // Neon mavi il çizgileri
+      fillColor: hasImage ? `url(#pattern-${place.id})` : (place?.color || (darkMode ? "#000" : "#fff")),
+      fillOpacity: hasImage ? 1 : (place ? 0.8 : 0.2), // Boyanmamış iller transparan
+      color: darkMode ? "#38bdf8" : "#0284c7", // Neon mavi il çizgileri
       weight: 1.5
     };
   };
@@ -562,16 +606,26 @@ export default function App() {
       )}
 
       {/* ===== MAP ===== */}
-      <div className="w-full h-full z-0 bg-black">
+      <div className={`w-full h-full z-0 ${darkMode ? 'bg-black' : 'bg-[#e5e7eb]'}`}>
+        <svg width="0" height="0" className="absolute pointer-events-none">
+          <defs>
+            {showPhotoMap && places.filter(p => !hiddenIds.has(p.id) && p.imageUrl).map(p => (
+              <pattern key={`pattern-${p.id}`} id={`pattern-${p.id}`} patternUnits="userSpaceOnUse" width="1" height="1">
+                <image href={p.imageUrl} width="100%" height="100%" preserveAspectRatio="xMidYMid slice" />
+              </pattern>
+            ))}
+          </defs>
+        </svg>
         <MapContainer
           center={[39.0, 35.0]}
           zoom={window.innerWidth < 768 ? 2 : 4}
           zoomControl={false}
-          className="w-full h-full outline-none bg-black"
-          style={{ background: '#000000' }}
+          className={`w-full h-full outline-none ${darkMode ? 'bg-black' : 'bg-slate-100'}`}
+          style={{ background: darkMode ? '#000000' : '#f8fafc' }}
         >
           <TileLayer
-            url="https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png"
+            key={darkMode ? 'dark' : 'light'}
+            url={darkMode ? "https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png" : "https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png"}
             attribution="&copy; OpenStreetMap &copy; CARTO"
           />
           <MapController selectedBounds={selectedBounds} />
@@ -820,13 +874,16 @@ export default function App() {
         />
       )}
       {showTimelineModal && (
-        <TimelineModal onClose={() => setShowTimelineModal(false)} showPartner={showPartnerMap} />
+        <TimelineModal onClose={() => setShowTimelineModal(false)} showPartner={showPartnerMap} onFocus={handleTimelineFocus} />
       )}
       {showSettingsModal && (
         <SettingsModal
           onClose={() => setShowSettingsModal(false)}
           darkMode={darkMode}
           onToggleDark={() => setDarkMode(d => !d)}
+          showPhotoMap={showPhotoMap}
+          onTogglePhotoMap={() => setShowPhotoMap(d => !d)}
+          onExport={handleExportMap}
         />
       )}
       {showNotifModal && <NotificationsModal onClose={() => setShowNotifModal(false)} />}
