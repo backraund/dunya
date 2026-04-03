@@ -80,13 +80,13 @@ export default function App() {
   const [hiddenIds, setHiddenIds] = useState<Set<string>>(new Set());
   const [showHidden, setShowHidden] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
-  const [showPartnerMap, setShowPartnerMap] = useState(false);
+  const [showPartnerMap, setShowPartnerMap] = useState(() => localStorage.getItem(`dunya_partner_${user?.username}`) === '1');
   const [showStatsModal, setShowStatsModal] = useState(false);
   const [showTimelineModal, setShowTimelineModal] = useState(false);
   const [showBucketModal, setShowBucketModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [showNotifModal, setShowNotifModal] = useState(false);
-  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [isOnboarded, setIsOnboarded] = useState(() => !!localStorage.getItem(`dunya_onboarded_${user?.username}`));
   const [formData, setFormData] = useState({
     color: PASTEL_COLORS[0],
     note: '',
@@ -100,6 +100,12 @@ export default function App() {
     localStorage.setItem('dunya_dark', String(darkMode));
     document.documentElement.classList.toggle('dark', darkMode);
   }, [darkMode]);
+
+  useEffect(() => {
+    if (user?.username) {
+      localStorage.setItem(`dunya_partner_${user?.username}`, showPartnerMap ? '1' : '0');
+    }
+  }, [showPartnerMap, user?.username]);
 
   const showToast = (msg: string, type: 'success' | 'error' = 'success') => {
     setToast({ msg, type });
@@ -824,10 +830,10 @@ export default function App() {
         />
       )}
       {showNotifModal && <NotificationsModal onClose={() => setShowNotifModal(false)} />}
-      {(showOnboarding || !localStorage.getItem(onboardingKey)) && token && (
+      {!isOnboarded && token && (
         <OnboardingModal onComplete={() => {
-          localStorage.setItem(onboardingKey, '1');
-          setShowOnboarding(false);
+          localStorage.setItem(`dunya_onboarded_${user?.username}`, '1');
+          setIsOnboarded(true);
         }} />
       )}
     </div>

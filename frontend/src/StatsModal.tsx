@@ -50,7 +50,7 @@ export default function StatsModal({ onClose }: Props) {
     { icon: Globe, label: t.countries, value: stats.countries_count, color: '#3b82f6', sub: '/195' },
     { icon: MapPin, label: t.cities, value: stats.cities_count, color: '#10b981', sub: '' },
     { icon: Image, label: t.photos, value: stats.photos_count, color: '#f59e0b', sub: '' },
-    { icon: BarChart2, label: 'Toplam Pin', value: stats.places_count, color: '#8b5cf6', sub: '' },
+    { icon: BarChart2, label: t.totalPins, value: stats.places_count, color: '#8b5cf6', sub: '' },
   ] : [];
 
   return (
@@ -92,7 +92,9 @@ export default function StatsModal({ onClose }: Props) {
                   </div>
                 </div>
                 <p className="text-slate-400 text-sm text-center">
-                  Dünyadaki 195 ülkeden <span className="text-blue-400 font-bold">{stats.countries_count}</span> tanesini gezdин
+                  {t.visitedSummary.split('{count}')[0]}
+                  <span className="text-blue-400 font-bold">{stats.countries_count}</span>
+                  {t.visitedSummary.split('{count}')[1]}
                 </p>
               </div>
 
@@ -114,7 +116,7 @@ export default function StatsModal({ onClose }: Props) {
 
               {/* Progress bars */}
               <div className="bg-black/40 border border-white/5 rounded-2xl p-4 flex flex-col gap-3">
-                <h3 className="text-xs text-slate-400 uppercase tracking-widest font-bold">Dünya İlerleme</h3>
+                <h3 className="text-xs text-slate-400 uppercase tracking-widest font-bold">{t.worldProgress}</h3>
                 <div>
                   <div className="flex justify-between text-xs mb-1">
                     <span className="text-slate-400">Ülkeler</span>

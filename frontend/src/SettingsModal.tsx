@@ -13,8 +13,8 @@ export default function SettingsModal({ onClose, darkMode, onToggleDark }: Props
   const { t, lang, setLang } = useI18n();
 
   const handleExport = () => {
-    // Create a simple text export of the map
-    window.print();
+    onClose();
+    setTimeout(() => window.print(), 300);
   };
 
   const handleLogout = () => {
@@ -46,7 +46,7 @@ export default function SettingsModal({ onClose, darkMode, onToggleDark }: Props
           {/* Account Section */}
           <div className="p-5 border-b border-white/5">
             <p className="text-xs text-slate-500 uppercase tracking-widest font-bold mb-3 flex items-center gap-2">
-              <User size={11} /> Hesap
+              <User size={11} /> {t.account}
             </p>
             <div className="bg-gradient-to-br from-blue-900/30 to-slate-900/50 rounded-2xl p-4 border border-blue-500/20">
               <div className="flex items-center gap-3">
@@ -65,7 +65,7 @@ export default function SettingsModal({ onClose, darkMode, onToggleDark }: Props
           {/* Appearance Section */}
           <div className="p-5 border-b border-white/5">
             <p className="text-xs text-slate-500 uppercase tracking-widest font-bold mb-3 flex items-center gap-2">
-              {darkMode ? <Moon size={11} /> : <Sun size={11} />} Görünüm
+              {darkMode ? <Moon size={11} /> : <Sun size={11} />} {t.appearance}
             </p>
 
             {/* Dark/Light Mode */}
@@ -77,7 +77,7 @@ export default function SettingsModal({ onClose, darkMode, onToggleDark }: Props
                 {darkMode ? <Moon size={18} className="text-blue-400" /> : <Sun size={18} className="text-amber-400" />}
                 <div className="text-left">
                   <p className="text-white text-sm font-semibold">{darkMode ? t.darkMode : t.lightMode}</p>
-                  <p className="text-slate-500 text-xs">Harita ve arayüz teması</p>
+                  <p className="text-slate-500 text-xs">{t.mapTheme}</p>
                 </div>
               </div>
               <div className={`w-11 h-6 rounded-full transition-colors flex items-center px-0.5 ${darkMode ? 'bg-blue-600' : 'bg-amber-500'}`}>
@@ -91,7 +91,7 @@ export default function SettingsModal({ onClose, darkMode, onToggleDark }: Props
                 <Languages size={18} className="text-emerald-400" />
                 <div>
                   <p className="text-white text-sm font-semibold">{t.language}</p>
-                  <p className="text-slate-500 text-xs">Uygulama dili</p>
+                  <p className="text-slate-500 text-xs">{t.appLang}</p>
                 </div>
               </div>
               <div className="flex gap-1 bg-black/50 rounded-xl p-1">
@@ -111,7 +111,7 @@ export default function SettingsModal({ onClose, darkMode, onToggleDark }: Props
           {/* Data Section */}
           <div className="p-5 border-b border-white/5">
             <p className="text-xs text-slate-500 uppercase tracking-widest font-bold mb-3 flex items-center gap-2">
-              <Shield size={11} /> Veri & Gizlilik
+              <Shield size={11} /> {t.dataPrivacy}
             </p>
             <button
               onClick={handleExport}
@@ -120,7 +120,7 @@ export default function SettingsModal({ onClose, darkMode, onToggleDark }: Props
               <Camera size={18} className="text-purple-400" />
               <div>
                 <p className="text-white text-sm font-semibold">{t.exportMap}</p>
-                <p className="text-slate-500 text-xs">Haritanı PNG olarak indir</p>
+                <p className="text-slate-500 text-xs">{t.exportToPng}</p>
               </div>
             </button>
           </div>

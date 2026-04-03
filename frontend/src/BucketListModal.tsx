@@ -131,7 +131,7 @@ export default function BucketListModal({ onClose, selectedCountry, selectedCity
         )}
 
         {/* List */}
-        <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3">
+        <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3 pb-24">
           {loading ? (
             <div className="flex justify-center py-8">
               <div className="w-6 h-6 border-2 border-amber-500/30 border-t-amber-500 rounded-full animate-spin" />
