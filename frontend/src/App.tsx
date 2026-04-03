@@ -6,8 +6,6 @@ import axios from 'axios';
 import localforage from 'localforage';
 import { MapPin, Image as ImageIcon, X, Map as MapIcon, Globe, ChevronDown, ChevronRight, EyeOff, Eye, UserCircle, Bell, BarChart2, Clock, Bookmark, Settings } from 'lucide-react';
 import { useAuth } from './AuthContext';
-import LoginPage from './LoginPage';
-import SplashScreen from './SplashScreen';
 import ProfileModal from './ProfileModal';
 import OnboardingModal from './OnboardingModal';
 import StatsModal from './StatsModal';
@@ -56,13 +54,14 @@ function MapController({ selectedBounds }: { selectedBounds: L.LatLngBounds | nu
 }
 
 export default function App() {
-  const { user, token, loading } = useAuth();
+  // Auth is guaranteed by RootApp in main.tsx — no need to check here
+  const { user, token } = useAuth();
   const { t } = useI18n();
 
-  // ── All state before conditional returns ──
   const authHeaders = { Authorization: `Bearer ${token}` };
   const cacheKey = `places_db_${user?.username || 'guest'}`;
   const hiddenKey = `hidden_ids_${user?.username || 'guest'}`;
+  const onboardingKey = `dunya_onboarded_${user?.username}`;
   const [darkMode, setDarkMode] = useState(() => localStorage.getItem('dunya_dark') !== 'false');
 
   const [places, setPlaces] = useState<Place[]>([]);
@@ -97,18 +96,10 @@ export default function App() {
   const geoJsonProvinceRef = useRef<any>(null);
   const placesRef = useRef<Place[]>(places);
 
-  // Dark mode effect
   useEffect(() => {
     localStorage.setItem('dunya_dark', String(darkMode));
     document.documentElement.classList.toggle('dark', darkMode);
   }, [darkMode]);
-
-  // Auth redirect — after ALL hooks
-  if (loading) return <SplashScreen />;
-  if (!token) return <LoginPage />;
-
-  // First-time user → show onboarding
-  const onboardingKey = `dunya_onboarded_${user?.username}`;
 
   const showToast = (msg: string, type: 'success' | 'error' = 'success') => {
     setToast({ msg, type });
