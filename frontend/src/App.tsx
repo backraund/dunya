@@ -4,7 +4,10 @@ import * as L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import axios from 'axios';
 import localforage from 'localforage';
-import { MapPin, Image as ImageIcon, Lock, X, Map as MapIcon, Globe, ChevronDown, ChevronRight, EyeOff, Eye } from 'lucide-react';
+import { MapPin, Image as ImageIcon, X, Map as MapIcon, Globe, ChevronDown, ChevronRight, EyeOff, Eye, UserCircle } from 'lucide-react';
+import { useAuth } from './AuthContext';
+import LoginPage from './LoginPage';
+import ProfileModal from './ProfileModal';
 
 localforage.config({
   name: 'Dunya DB',
@@ -20,12 +23,13 @@ const TURKEY_PROVINCES: Record<string, string> = {
 
 type Place = {
   id: string;
-  country_id: string; // ISO A3
+  country_id: string;
   country_name: string;
-  city: string; // Province Name
+  city: string;
   color: string;
   imageUrl?: string;
   note?: string;
+  from_partner?: boolean;
 };
 
 // Harita içi kontrolcüsü (Zoom to element)
@@ -44,17 +48,20 @@ function MapController({ selectedBounds }: { selectedBounds: L.LatLngBounds | nu
 }
 
 export default function App() {
+  const { user, token } = useAuth();
+
+  // ── All state must be declared before any conditional return ──
+  const authHeaders = { Authorization: `Bearer ${token}` };
+  const cacheKey = `places_db_${user?.username || 'guest'}`;
+  const hiddenKey = `hidden_ids_${user?.username || 'guest'}`;
+
   const [places, setPlaces] = useState<Place[]>([]);
-  
-  // Harita Verileri
   const [worldData, setWorldData] = useState<any>(null);
   const [provinceData, setProvinceData] = useState<any>(null);
-  const [globalStates, setGlobalStates] = useState<any[]>([]); // Sadece isim restorasyonu için dev dizin
-  
+  const [globalStates, setGlobalStates] = useState<any[]>([]);
   const [selectedCountry, setSelectedCountry] = useState<{id: string, name: string, iso2?: string} | null>(null);
   const [selectedProvince, setSelectedProvince] = useState<string>('');
   const [selectedBounds, setSelectedBounds] = useState<L.LatLngBounds | null>(null);
-  
   const [isLoading, setIsLoading] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'view' | 'add'>('view');
@@ -63,36 +70,37 @@ export default function App() {
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
   const [hiddenIds, setHiddenIds] = useState<Set<string>>(new Set());
   const [showHidden, setShowHidden] = useState(false);
+  const [showProfileModal, setShowProfileModal] = useState(false);
+  const [showPartnerMap, setShowPartnerMap] = useState(false);
+  const [formData, setFormData] = useState({
+    color: PASTEL_COLORS[0],
+    note: '',
+    file: null as File | null
+  });
+  const geoJsonWorldRef = useRef<any>(null);
+  const geoJsonProvinceRef = useRef<any>(null);
+  const placesRef = useRef<Place[]>(places);
+
+  // Redirect after all hooks
+  if (!token) return <LoginPage />;
 
   const showToast = (msg: string, type: 'success' | 'error' = 'success') => {
     setToast({ msg, type });
     setTimeout(() => setToast(null), 2500);
   };
-  
-  const [formData, setFormData] = useState({
-    color: PASTEL_COLORS[0],
-    note: '',
-    password: '',
-    file: null as File | null
-  });
-
-  const geoJsonWorldRef = useRef<any>(null);
-  const geoJsonProvinceRef = useRef<any>(null);
-  const placesRef = useRef<Place[]>(places);
 
   useEffect(() => {
-    // hiddenIds'i localforage'dan yükle
-    localforage.getItem<string[]>('hidden_ids').then(ids => {
+    localforage.getItem<string[]>(hiddenKey).then(ids => {
       if (ids) setHiddenIds(new Set(ids));
     });
-  }, []);
+  }, [hiddenKey]);
 
   const toggleHide = (placeId: string) => {
     setHiddenIds(prev => {
       const next = new Set(prev);
       if (next.has(placeId)) next.delete(placeId); else next.add(placeId);
-      localforage.setItem('hidden_ids', Array.from(next));
-      showToast(next.has(placeId) ? 'Görseli gizlendi' : 'Görsel gösterildi');
+      localforage.setItem(hiddenKey, Array.from(next));
+      showToast(next.has(placeId) ? 'Görsel gizlendi' : 'Görsel gösterildi');
       return next;
     });
   };
@@ -105,33 +113,32 @@ export default function App() {
   }, [places]);
 
   useEffect(() => {
-    // 1. ÖNCE localforage'dan anlık yükle (F5'te kayıp yok!)
-    localforage.getItem<Place[]>('places_db').then(cached => {
-      if (cached && cached.length > 0) {
-        setPlaces(cached);
-      }
+    if (!token) return;
+    // 1. ÖNCE localforage'dan anlık yükle
+    localforage.getItem<Place[]>(cacheKey).then(cached => {
+      if (cached && cached.length > 0) setPlaces(cached);
     });
-
-    // 2. ARKA PLANDA backend sync (backend çalışıyorsa veriyi güncelle)
-    axios.get('/api/places')
+    // 2. Backend sync (JWT ile)
+    axios.get('/api/places', {
+      headers: authHeaders,
+      params: { include_partner: showPartnerMap }
+    })
       .then(res => {
         if (res.data && res.data.length > 0) {
           setPlaces(res.data);
-          localforage.setItem('places_db', res.data); // Cache güncelle
+          localforage.setItem(cacheKey, res.data);
         }
       })
-      .catch(() => { /* Backend down - localforage yeterli */ });
+      .catch(() => { /* localforage fallback yeterli */ });
 
-    // Localden tüm dünyanın ülke haritasını çekelim
     axios.get('/geo/world.geojson')
       .then(res => setWorldData(res.data))
-      .catch(err => console.error("Local world data missing!", err));
+      .catch(err => console.error('world.geojson missing', err));
 
-    // Harf bozulmaları için Global Sözlüğü yükle
     axios.get('/geo/states.json')
       .then(res => setGlobalStates(res.data))
-      .catch(err => console.error("Global states mappings missing.", err));
-  }, []);
+      .catch(err => console.error('states.json missing', err));
+  }, [token, showPartnerMap]);
 
   const handleCountryClick = async (feature: any, layer: any) => {
     let isoA3 = feature.properties['ISO3166-1-Alpha-3'];
@@ -315,39 +322,30 @@ export default function App() {
         imageUrl: b64Image
       };
 
-      // Backend API'ye gönder (MongoDB - tüm cihazlarda görünsün)
+      // Backend API'ye gönder (JWT authentication)
       try {
         const fd = new FormData();
         fd.append('country_id', newPlace.country_id);
         fd.append('country_name', newPlace.country_name);
         fd.append('city', newPlace.city);
         fd.append('color', newPlace.color);
-        fd.append('password', formData.password);
         if (formData.note) fd.append('note', formData.note);
-        if (b64Image) fd.append('imageUrl', b64Image); // Base64 resmi gönder
-        const res = await axios.post('/api/places', fd);
-        if (res.status === 403) {
-          showToast('Yanlış şifre!', 'error');
-          return;
-        }
+        if (b64Image) fd.append('imageUrl', b64Image);
+        const res = await axios.post('/api/places', fd, { headers: authHeaders });
         const savedPlace = { ...newPlace, ...res.data };
         const updatedPlaces = [...places, savedPlace];
         setPlaces(updatedPlaces);
-        localforage.setItem('places_db', updatedPlaces);
+        localforage.setItem(cacheKey, updatedPlaces);
       } catch (apiErr: any) {
-        if (apiErr?.response?.status === 403) {
-          showToast('Yanlış şifre!', 'error');
-          return;
-        }
         // Backend çalışmıyorsa yerel kaydet
         const updatedPlaces = [...places, newPlace];
         setPlaces(updatedPlaces);
-        localforage.setItem('places_db', updatedPlaces);
+        localforage.setItem(cacheKey, updatedPlaces);
       }
 
       showToast(`${selectedProvince} haritaya işlendi! ✓`);
       setActiveTab('view');
-      setFormData(prev => ({...prev, note: '', file: null, password: ''}));
+      setFormData(prev => ({...prev, note: '', file: null}));
     } catch (err) {
       console.error("DB Error", err);
       showToast("Bir hata oluştu.", 'error');
@@ -414,6 +412,13 @@ export default function App() {
               {visitedCountries.length} Ülke
             </button>
           )}
+          <button
+            onClick={() => setShowProfileModal(true)}
+            className="bg-slate-800 hover:bg-slate-700 text-white p-2 rounded-xl border border-slate-600 flex items-center justify-center min-w-[36px] min-h-[36px] transition-colors"
+            title="Profil"
+          >
+            <UserCircle size={18} className="text-blue-400" />
+          </button>
         </div>
       </div>
 
@@ -421,12 +426,21 @@ export default function App() {
       <div className="hidden md:flex absolute top-6 left-6 z-[1000] w-[320px] max-h-[calc(100vh-48px)] flex-col gap-4 pointer-events-none">
         {/* Üst Başlık & Kontroller */}
         <div className="bg-black/60 backdrop-blur-xl p-5 rounded-2xl shadow-2xl border border-white/10 flex flex-col gap-4 pointer-events-auto shrink-0">
-          <div>
-            <h1 className="text-3xl font-extrabold flex items-center gap-3 text-white">
-              <Globe className="text-blue-400" size={32} />
-              Dünyam
-            </h1>
-            <p className="text-slate-400 mt-1 text-xs uppercase tracking-widest font-bold">Low-Poly Siyasi Harita</p>
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-extrabold flex items-center gap-3 text-white">
+                <Globe className="text-blue-400" size={32} />
+                Dünyam
+              </h1>
+              <p className="text-slate-400 mt-1 text-xs uppercase tracking-widest font-bold">Low-Poly Siyasi Harita</p>
+            </div>
+            <button
+              onClick={() => setShowProfileModal(true)}
+              className="bg-slate-800 hover:bg-blue-600/30 text-white p-2.5 rounded-xl border border-slate-600 hover:border-blue-500/50 transition-colors flex items-center justify-center"
+              title={`@${user?.username}`}
+            >
+              <UserCircle size={22} className="text-blue-400" />
+            </button>
           </div>
           {selectedCountry && (
             <div className="bg-slate-900/60 p-3 rounded-lg border border-slate-700/50 flex flex-col gap-2">
@@ -597,7 +611,7 @@ export default function App() {
                 className={`pb-3 border-b-2 transition-colors font-semibold uppercase tracking-wider text-xs min-h-[44px] ${activeTab === 'add' ? 'text-green-400 border-green-400' : 'text-slate-500 border-transparent'}`}
                 onClick={() => setActiveTab('add')}
               >
-                <span className="flex items-center gap-2">Pini Zapt Et <Lock size={12}/></span>
+                <span className="flex items-center gap-2">Pini Zapt Et ✦</span>
               </button>
             </div>
 
@@ -692,26 +706,8 @@ export default function App() {
 
               {activeTab === 'add' && (
                 <form onSubmit={handleSubmit} className="flex flex-col gap-5">
-                  <div className="bg-blue-500/10 border border-blue-500/20 p-4 rounded-xl flex items-start gap-4">
-                    <div className="bg-blue-500/20 p-2 rounded-lg shrink-0">
-                      <Lock className="text-blue-400" size={20} />
-                    </div>
-                    <div>
-                      <h4 className="text-blue-400 font-bold text-xs uppercase tracking-wider">Geliştirici Şifresi</h4>
-                      <p className="text-xs text-blue-200 mt-1 leading-relaxed opacity-80">Bu lokasyonu sisteme işlemek kod korumalıdır.</p>
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-slate-400 mb-2 uppercase tracking-wide">Erişim Şifresi <span className="text-rose-500">*</span></label>
-                    <input
-                      type="password"
-                      required
-                      className="w-full p-4 bg-black/50 border border-white/10 text-white rounded-xl focus:border-blue-500 outline-none transition-all placeholder:text-slate-600 text-base"
-                      value={formData.password}
-                      onChange={(e) => setFormData({...formData, password: e.target.value})}
-                      placeholder="Şifre"
-                    />
-                  </div>
+                  {/* JWT auth ile giriş yapıldığı için şifre
+                      alanına gerek yok — kullanıcı kimliği token’dan geliyor */}
                   <hr className="border-white/5" />
                   <div>
                     <label className="block text-xs font-bold text-slate-400 mb-2 uppercase tracking-wide">Durum Notu</label>
@@ -762,6 +758,14 @@ export default function App() {
             </div>
           </div>
         </div>
+      )}
+      {/* ===== PROFILE MODAL ===== */}
+      {showProfileModal && (
+        <ProfileModal
+          onClose={() => setShowProfileModal(false)}
+          showPartnerMap={showPartnerMap}
+          onTogglePartnerMap={setShowPartnerMap}
+        />
       )}
     </div>
   );
