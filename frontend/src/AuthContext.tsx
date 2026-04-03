@@ -11,6 +11,7 @@ interface User {
 interface AuthContextType {
   user: User | null;
   token: string | null;
+  loading: boolean;
   login: (username: string, password: string) => Promise<void>;
   register: (username: string, email: string, password: string, displayName: string) => Promise<void>;
   logout: () => void;
@@ -22,21 +23,32 @@ const AuthContext = createContext<AuthContextType>(null!);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(() => localStorage.getItem('dunya_token'));
+  // loading=true only if a token exists (need to verify it on mount)
+  const [loading, setLoading] = useState<boolean>(!!localStorage.getItem('dunya_token'));
 
   useEffect(() => {
-    if (token) refreshUser();
+    if (token) {
+      refreshUser();
+    } else {
+      setLoading(false);
+    }
   }, []);
 
   const refreshUser = async () => {
     const t = localStorage.getItem('dunya_token');
-    if (!t) return;
+    if (!t) { setLoading(false); return; }
     try {
       const res = await axios.get('/api/auth/me', {
         headers: { Authorization: `Bearer ${t}` },
       });
       setUser(res.data);
     } catch {
-      logout();
+      // Token invalid or expired → logout cleanly
+      localStorage.removeItem('dunya_token');
+      setToken(null);
+      setUser(null);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -71,7 +83,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, login, register, logout, refreshUser }}>
+    <AuthContext.Provider value={{ user, token, loading, login, register, logout, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );

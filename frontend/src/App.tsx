@@ -4,10 +4,18 @@ import * as L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import axios from 'axios';
 import localforage from 'localforage';
-import { MapPin, Image as ImageIcon, X, Map as MapIcon, Globe, ChevronDown, ChevronRight, EyeOff, Eye, UserCircle } from 'lucide-react';
+import { MapPin, Image as ImageIcon, X, Map as MapIcon, Globe, ChevronDown, ChevronRight, EyeOff, Eye, UserCircle, Bell, BarChart2, Clock, Bookmark, Settings } from 'lucide-react';
 import { useAuth } from './AuthContext';
 import LoginPage from './LoginPage';
+import SplashScreen from './SplashScreen';
 import ProfileModal from './ProfileModal';
+import OnboardingModal from './OnboardingModal';
+import StatsModal from './StatsModal';
+import BucketListModal from './BucketListModal';
+import TimelineModal from './TimelineModal';
+import SettingsModal from './SettingsModal';
+import NotificationsModal from './NotificationsModal';
+import { useI18n } from './i18n';
 
 localforage.config({
   name: 'Dunya DB',
@@ -48,12 +56,14 @@ function MapController({ selectedBounds }: { selectedBounds: L.LatLngBounds | nu
 }
 
 export default function App() {
-  const { user, token } = useAuth();
+  const { user, token, loading } = useAuth();
+  const { t } = useI18n();
 
-  // ── All state must be declared before any conditional return ──
+  // ── All state before conditional returns ──
   const authHeaders = { Authorization: `Bearer ${token}` };
   const cacheKey = `places_db_${user?.username || 'guest'}`;
   const hiddenKey = `hidden_ids_${user?.username || 'guest'}`;
+  const [darkMode, setDarkMode] = useState(() => localStorage.getItem('dunya_dark') !== 'false');
 
   const [places, setPlaces] = useState<Place[]>([]);
   const [worldData, setWorldData] = useState<any>(null);
@@ -72,6 +82,12 @@ export default function App() {
   const [showHidden, setShowHidden] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showPartnerMap, setShowPartnerMap] = useState(false);
+  const [showStatsModal, setShowStatsModal] = useState(false);
+  const [showTimelineModal, setShowTimelineModal] = useState(false);
+  const [showBucketModal, setShowBucketModal] = useState(false);
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [showNotifModal, setShowNotifModal] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(false);
   const [formData, setFormData] = useState({
     color: PASTEL_COLORS[0],
     note: '',
@@ -81,8 +97,18 @@ export default function App() {
   const geoJsonProvinceRef = useRef<any>(null);
   const placesRef = useRef<Place[]>(places);
 
-  // Redirect after all hooks
+  // Dark mode effect
+  useEffect(() => {
+    localStorage.setItem('dunya_dark', String(darkMode));
+    document.documentElement.classList.toggle('dark', darkMode);
+  }, [darkMode]);
+
+  // Auth redirect — after ALL hooks
+  if (loading) return <SplashScreen />;
   if (!token) return <LoginPage />;
+
+  // First-time user → show onboarding
+  const onboardingKey = `dunya_onboarded_${user?.username}`;
 
   const showToast = (msg: string, type: 'success' | 'error' = 'success') => {
     setToast({ msg, type });
@@ -759,13 +785,59 @@ export default function App() {
           </div>
         </div>
       )}
-      {/* ===== PROFILE MODAL ===== */}
+      {/* ===== MOBILE BOTTOM NAV ===== */}
+      <div className="md:hidden fixed bottom-0 left-0 right-0 z-[1500] bg-black/80 backdrop-blur-xl border-t border-white/10 flex items-center justify-around"
+        style={{ paddingBottom: 'max(12px, env(safe-area-inset-bottom))', paddingTop: '8px' }}>
+        <button onClick={() => setShowStatsModal(true)} className="flex flex-col items-center gap-1 py-1 px-3 text-slate-400 hover:text-blue-400 transition-colors min-w-[52px]">
+          <BarChart2 size={20} />
+          <span className="text-[9px] uppercase tracking-wide font-bold">{t.stats}</span>
+        </button>
+        <button onClick={() => setShowBucketModal(true)} className="flex flex-col items-center gap-1 py-1 px-3 text-slate-400 hover:text-amber-400 transition-colors min-w-[52px]">
+          <Bookmark size={20} />
+          <span className="text-[9px] uppercase tracking-wide font-bold">{t.bucketList}</span>
+        </button>
+        <button onClick={() => setShowTimelineModal(true)} className="flex flex-col items-center gap-1 py-1 px-3 text-slate-400 hover:text-emerald-400 transition-colors min-w-[52px]">
+          <Clock size={20} />
+          <span className="text-[9px] uppercase tracking-wide font-bold">{t.timeline}</span>
+        </button>
+        <button onClick={() => setShowNotifModal(true)} className="relative flex flex-col items-center gap-1 py-1 px-3 text-slate-400 hover:text-violet-400 transition-colors min-w-[52px]">
+          <Bell size={20} />
+          <span className="text-[9px] uppercase tracking-wide font-bold">{t.notifications}</span>
+        </button>
+        <button onClick={() => setShowSettingsModal(true)} className="flex flex-col items-center gap-1 py-1 px-3 text-slate-400 hover:text-slate-200 transition-colors min-w-[52px]">
+          <Settings size={20} />
+          <span className="text-[9px] uppercase tracking-wide font-bold">{t.settings}</span>
+        </button>
+      </div>
+
+      {/* ===== ALL MODALS ===== */}
       {showProfileModal && (
-        <ProfileModal
-          onClose={() => setShowProfileModal(false)}
-          showPartnerMap={showPartnerMap}
-          onTogglePartnerMap={setShowPartnerMap}
+        <ProfileModal onClose={() => setShowProfileModal(false)} showPartnerMap={showPartnerMap} onTogglePartnerMap={setShowPartnerMap} />
+      )}
+      {showStatsModal && <StatsModal onClose={() => setShowStatsModal(false)} />}
+      {showBucketModal && (
+        <BucketListModal
+          onClose={() => setShowBucketModal(false)}
+          selectedCountry={selectedCountry}
+          selectedCity={selectedProvince}
         />
+      )}
+      {showTimelineModal && (
+        <TimelineModal onClose={() => setShowTimelineModal(false)} showPartner={showPartnerMap} />
+      )}
+      {showSettingsModal && (
+        <SettingsModal
+          onClose={() => setShowSettingsModal(false)}
+          darkMode={darkMode}
+          onToggleDark={() => setDarkMode(d => !d)}
+        />
+      )}
+      {showNotifModal && <NotificationsModal onClose={() => setShowNotifModal(false)} />}
+      {(showOnboarding || !localStorage.getItem(onboardingKey)) && token && (
+        <OnboardingModal onComplete={() => {
+          localStorage.setItem(onboardingKey, '1');
+          setShowOnboarding(false);
+        }} />
       )}
     </div>
   );
