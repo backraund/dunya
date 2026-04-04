@@ -1,4 +1,4 @@
-import { X, Sun, Moon, LogOut, User, Camera, Shield, Languages } from 'lucide-react';
+import { X, Sun, Moon, LogOut, User, Camera, Shield, Languages, Download } from 'lucide-react';
 import { useAuth } from './AuthContext';
 import { useI18n } from './i18n';
 
@@ -9,9 +9,11 @@ interface Props {
   showPhotoMap: boolean;
   onTogglePhotoMap: () => void;
   onExport: () => void;
+  isInstallable: boolean;
+  onInstallRequest: () => void;
 }
 
-export default function SettingsModal({ onClose, darkMode, onToggleDark, showPhotoMap, onTogglePhotoMap, onExport }: Props) {
+export default function SettingsModal({ onClose, darkMode, onToggleDark, showPhotoMap, onTogglePhotoMap, onExport, isInstallable, onInstallRequest }: Props) {
   const { user, logout } = useAuth();
   const { t, lang, setLang } = useI18n();
 
@@ -138,6 +140,19 @@ export default function SettingsModal({ onClose, darkMode, onToggleDark, showPho
                 <p className="text-slate-500 text-xs">{t.exportToPng}</p>
               </div>
             </button>
+
+            {isInstallable && (
+              <button
+                onClick={onInstallRequest}
+                className="w-full flex items-center gap-3 p-4 bg-blue-600/20 border border-blue-500/30 rounded-2xl hover:bg-blue-600/40 transition-colors mt-3 text-left"
+              >
+                <Download size={18} className="text-blue-400" />
+                <div>
+                  <p className="text-white text-sm font-semibold">Ana Ekrana Ekle</p>
+                  <p className="text-blue-300/70 text-xs text-left">Mobil uygulama olarak yükle</p>
+                </div>
+              </button>
+            )}
           </div>
 
           {/* Danger Zone */}

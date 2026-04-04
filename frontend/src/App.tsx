@@ -4,7 +4,7 @@ import * as L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import axios from 'axios';
 import localforage from 'localforage';
-import { MapPin, Image as ImageIcon, X, Map as MapIcon, Globe, ChevronDown, ChevronRight, EyeOff, Eye, UserCircle, Bell, BarChart2, Clock, Bookmark, Settings } from 'lucide-react';
+import { MapPin, Image as ImageIcon, X, Map as MapIcon, Globe, ChevronDown, ChevronRight, EyeOff, Eye, UserCircle, Bell, BarChart2, Clock, Bookmark, Settings, Download } from 'lucide-react';
 import { useAuth } from './AuthContext';
 import ProfileModal from './ProfileModal';
 import OnboardingModal from './OnboardingModal';
@@ -88,6 +88,9 @@ export default function App() {
   const [showNotifModal, setShowNotifModal] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [isOnboarded, setIsOnboarded] = useState(() => !!localStorage.getItem(`dunya_onboarded_${user?.username}`));
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [showPwaPrompt, setShowPwaPrompt] = useState(false);
+  const [isIosPrompt, setIsIosPrompt] = useState(false);
   const [formData, setFormData] = useState({
     color: PASTEL_COLORS[0],
     note: '',
@@ -141,6 +144,36 @@ export default function App() {
         geoJsonProvinceRef.current.setStyle(getProvinceStyle);
     }
   }, [places, showPhotoMap, darkMode, hiddenIds, selectedCountry, provinceData]);
+
+  useEffect(() => {
+    const handler = (e: any) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+      if (localStorage.getItem('dunya_pwa_dismissed') !== '1') {
+        setShowPwaPrompt(true);
+      }
+    };
+    window.addEventListener('beforeinstallprompt', handler);
+    return () => window.removeEventListener('beforeinstallprompt', handler);
+  }, []);
+
+  useEffect(() => {
+    const isIos = /iphone|ipad|ipod/.test(window.navigator.userAgent.toLowerCase());
+    const isStandalone = ('standalone' in window.navigator) && (window.navigator as any).standalone;
+    if (isIos && !isStandalone && localStorage.getItem('dunya_pwa_dismissed') !== '1') {
+      setIsIosPrompt(true);
+    }
+  }, []);
+
+  const handlePwaInstall = async () => {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    if (outcome === 'accepted') {
+      setShowPwaPrompt(false);
+      setDeferredPrompt(null);
+    }
+  };
 
   useEffect(() => {
     if (!token) return;
@@ -946,6 +979,8 @@ export default function App() {
           showPhotoMap={showPhotoMap}
           onTogglePhotoMap={() => setShowPhotoMap(d => !d)}
           onExport={handleExportMap}
+          isInstallable={!!deferredPrompt || isIosPrompt}
+          onInstallRequest={showPwaPrompt ? handlePwaInstall : () => alert('Safari alt menüsünden "Paylaş (Share)" ikonuna tıklayıp "Ana Ekrana Ekle (Add to Home Screen)" seçeneğini seçin.')}
         />
       )}
       {showNotifModal && <NotificationsModal onClose={() => setShowNotifModal(false)} />}
@@ -956,6 +991,32 @@ export default function App() {
           <p className="text-slate-400 text-sm">Gezdiğin tüm yerler kadraja alınıyor, lütfen bekle.</p>
         </div>
       )}
+
+      {/* PWA BANNER */}
+      {(showPwaPrompt || isIosPrompt) && (
+        <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[4000] w-[90%] max-w-sm bg-slate-900 border border-blue-500/50 shadow-2xl rounded-2xl p-4 flex items-center justify-between gap-3 animate-in slide-in-from-top-4 duration-500">
+          <div className="flex items-center gap-3">
+             <div className="bg-blue-500 p-2 rounded-xl text-white shadow-[0_0_15px_rgba(59,130,246,0.5)]">
+               <Download size={20} />
+             </div>
+             <div>
+                <p className="text-white font-bold text-sm">Uygulama Olarak Yükle</p>
+                <p className="text-slate-400 text-xs text-left">Tam ekran & süper hızlı</p>
+             </div>
+          </div>
+          <div className="flex items-center gap-2">
+             {showPwaPrompt ? (
+               <button onClick={handlePwaInstall} className="bg-white text-blue-900 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-slate-200 shadow-xl cursor-pointer">Yükle</button>
+             ) : (
+               <button onClick={() => alert('Safari alt menüsünden "Paylaş (Share)" ikonuna tıklayıp "Ana Ekrana Ekle (Add to Home Screen)" seçeneğini seçin.')} className="bg-white text-blue-900 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-slate-200 cursor-pointer">Nasıl?</button>
+             )}
+             <button onClick={() => { setShowPwaPrompt(false); setIsIosPrompt(false); localStorage.setItem('dunya_pwa_dismissed', '1'); }} className="text-slate-500 hover:text-white p-1">
+               <X size={16} />
+             </button>
+          </div>
+        </div>
+      )}
+
       {!isOnboarded && token && (
         <OnboardingModal onComplete={() => {
           localStorage.setItem(`dunya_onboarded_${user?.username}`, '1');
