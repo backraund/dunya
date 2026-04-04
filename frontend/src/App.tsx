@@ -352,12 +352,12 @@ export default function App() {
       return { fillColor: 'transparent', fillOpacity: 0, color: 'transparent', weight: 0 };
     }
 
-    const placeWithImg = showPhotoMap ? placesRef.current.find(p => p.country_id === iso && p.imageUrl && !hiddenIds.has(p.id)) : null;
+    const collage = showPhotoMap ? countryCollages.find(c => c.country_id === iso) : null;
     const cColor = getCountryColor(iso);
-    const hasImage = !!placeWithImg;
+    const hasImage = !!collage && collage.items.length > 0;
 
     return {
-      fillColor: hasImage ? `url(#pattern-${placeWithImg.id})` : (cColor || (darkMode ? "#0a0a0c" : "#f1f5f9")), 
+      fillColor: hasImage ? `url(#collage-${iso})` : (cColor || (darkMode ? "#0a0a0c" : "#f1f5f9")), 
       fillOpacity: hasImage ? 1 : (cColor ? 0.6 : 0.8), // Gezilen ülkeler hafif parlar
       color: darkMode ? "#27272a" : "#cbd5e1", // İnce ülke detayları
       weight: cColor ? 2 : 0.5
@@ -437,6 +437,18 @@ export default function App() {
   const visibleCountryPlaces = countryPlaces.filter(p => !hiddenIds.has(p.id));
   const countryImages = visibleCountryPlaces.filter(p => p.imageUrl).map(p => ({ url: p.imageUrl!, city: p.city, id: p.id }));
   const hiddenImagesCount = countryPlaces.filter(p => p.imageUrl && hiddenIds.has(p.id)).length;
+
+  const countryCollages = useMemo(() => {
+    if (!showPhotoMap) return [];
+    const map = new Map<string, string[]>();
+    places.filter(p => !hiddenIds.has(p.id) && p.imageUrl).forEach(p => {
+       if (!map.has(p.country_id)) map.set(p.country_id, []);
+       map.get(p.country_id)!.push(p.imageUrl!);
+    });
+    return Array.from(map.entries()).map(([country_id, urls]) => {
+        return { country_id, items: urls.slice(0, 4) }; // max 4 items per country collage
+    });
+  }, [places, hiddenIds, showPhotoMap]);
 
   const visitedCountries = useMemo(() => {
     const map = new Map<string, { country_id: string, country_name: string, cities: string[] }>();
@@ -625,9 +637,19 @@ export default function App() {
           <defs>
             {showPhotoMap && places.filter(p => !hiddenIds.has(p.id) && p.imageUrl).map(p => (
               <pattern key={`pattern-${p.id}`} id={`pattern-${p.id}`} patternUnits="objectBoundingBox" patternContentUnits="objectBoundingBox" width="1" height="1">
-                <image href={p.imageUrl} x="0" y="0" width="1" height="1" preserveAspectRatio="xMidYMid slice" />
+                <image href={p.imageUrl} x="0" y="0" width="1" height="1" preserveAspectRatio="xMidYMin slice" />
               </pattern>
             ))}
+            {countryCollages.map(collage => {
+               const w = 1 / collage.items.length;
+               return (
+                  <pattern key={`collage-${collage.country_id}`} id={`collage-${collage.country_id}`} patternUnits="objectBoundingBox" patternContentUnits="objectBoundingBox" width="1" height="1">
+                     {collage.items.map((url, i) => (
+                        <image key={`img-${i}`} href={url} x={i * w} y="0" width={w} height="1" preserveAspectRatio="xMidYMin slice" />
+                     ))}
+                  </pattern>
+               );
+            })}
           </defs>
         </svg>
         <MapContainer
