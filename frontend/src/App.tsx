@@ -306,36 +306,45 @@ export default function App() {
 
   const handleExportMap = () => {
     setShowSettingsModal(false);
-    setSelectedCountry(null);
-    setSelectedProvince('');
-    setProvinceData(null);
-    setIsModalOpen(false);
     setIsExporting(true);
-
-    if (placesRef.current.length > 0 && geoJsonWorldRef.current) {
-      const layers = geoJsonWorldRef.current.getLayers();
-      const boundsList = layers
-         .filter((l: any) => {
-           let iso = l.feature.properties['ISO3166-1-Alpha-3'];
-           if (l.feature.properties.name === "Northern Cyprus") iso = "TRNC";
-           return placesRef.current.some(p => p.country_id === iso);
-         })
-         .map((l: any) => l.getBounds && l.getBounds())
-         .filter(Boolean);
-      
-      if (boundsList.length > 0) {
-         let allBounds = L.latLngBounds(boundsList[0].getSouthWest(), boundsList[0].getNorthEast());
-         for(let i=1; i<boundsList.length; i++) allBounds.extend(boundsList[i]);
-         setSelectedBounds(allBounds);
-      }
-    } else {
-      setSelectedBounds(null); // Return to default
-    }
     
+    // Reset view state to ensure world map is fully visible for bounds calculation
+    setSelectedCountry(null);
+    setProvinceData(null);
+    setSelectedProvince('');
+    setSelectedBounds(null);
+
+    // Give React a frame to clear the state and restore world layer visibility
     setTimeout(() => {
-       setIsExporting(false);
-       setTimeout(() => window.print(), 100);
-    }, 2000);
+      if (placesRef.current.length > 0 && geoJsonWorldRef.current) {
+        const layers = geoJsonWorldRef.current.getLayers();
+        const visitedCountriesIds = new Set(placesRef.current.map(p => p.country_id));
+        
+        const boundsList = layers
+           .filter((l: any) => {
+             let iso = l.feature.properties['ISO3166-1-Alpha-3'];
+             if (l.feature.properties.name === "Northern Cyprus") iso = "TRNC";
+             return visitedCountriesIds.has(iso);
+           })
+           .map((l: any) => l.getBounds && l.getBounds())
+           .filter(Boolean);
+        
+        if (boundsList.length > 0) {
+           let allBounds = boundsList[0];
+           for(let i=1; i<boundsList.length; i++) {
+             allBounds.extend(boundsList[i]);
+           }
+           setSelectedBounds(allBounds);
+        }
+      }
+
+      // MapController takes 1.5s (duration: 1.5) to flyToBounds
+      setTimeout(() => {
+         setIsExporting(false);
+         // Minor extra delay for final layout stabilization
+         setTimeout(() => window.print(), 500);
+      }, 2000);
+    }, 100);
   };
 
   const getPlaceColor = (countryId: string, shapeName: string) => {
