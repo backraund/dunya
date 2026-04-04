@@ -86,6 +86,7 @@ export default function App() {
   const [showBucketModal, setShowBucketModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [showNotifModal, setShowNotifModal] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
   const [isOnboarded, setIsOnboarded] = useState(() => !!localStorage.getItem(`dunya_onboarded_${user?.username}`));
   const [formData, setFormData] = useState({
     color: PASTEL_COLORS[0],
@@ -129,11 +130,16 @@ export default function App() {
     });
   };
 
-  // State'i Ref içinde de güncel tutarak Leaflet eventlerinde taze veriye ulaşalım
   useEffect(() => {
     placesRef.current = places;
-    if (geoJsonWorldRef.current) geoJsonWorldRef.current.setStyle(getWorldStyle);
-    if (geoJsonProvinceRef.current) geoJsonProvinceRef.current.setStyle(getProvinceStyle);
+    if (geoJsonWorldRef.current) {
+        geoJsonWorldRef.current.options.style = getWorldStyle;
+        geoJsonWorldRef.current.setStyle(getWorldStyle);
+    }
+    if (geoJsonProvinceRef.current) {
+        geoJsonProvinceRef.current.options.style = getProvinceStyle;
+        geoJsonProvinceRef.current.setStyle(getProvinceStyle);
+    }
   }, [places, showPhotoMap, darkMode, hiddenIds]);
 
   useEffect(() => {
@@ -246,6 +252,7 @@ export default function App() {
 
   const handleZoomOut = () => {
     setSelectedCountry(null);
+    setSelectedProvince('');
     setProvinceData(null);
     setSelectedBounds(null);
     setIsModalOpen(false);
@@ -259,13 +266,14 @@ export default function App() {
       if (l.feature.properties.name === 'Northern Cyprus') iso = 'TRNC';
       return iso === countryId;
     });
-    if (layer && layer.getBounds) {
-      setSelectedBounds(layer.getBounds());
+    if (layer) {
+      handleCountryClick(layer.feature, layer);
     }
   };
 
   const handleExportMap = () => {
     setShowSettingsModal(false);
+    setIsExporting(true);
     if (placesRef.current.length > 0 && geoJsonWorldRef.current) {
       const layers = geoJsonWorldRef.current.getLayers();
       const boundsList = layers
@@ -284,8 +292,9 @@ export default function App() {
       }
     }
     setTimeout(() => {
-       window.print();
-    }, 1500);
+       setIsExporting(false);
+       setTimeout(() => window.print(), 100);
+    }, 2000);
   };
 
   const getPlaceColor = (countryId: string, shapeName: string) => {
@@ -610,8 +619,8 @@ export default function App() {
         <svg width="0" height="0" className="absolute pointer-events-none">
           <defs>
             {showPhotoMap && places.filter(p => !hiddenIds.has(p.id) && p.imageUrl).map(p => (
-              <pattern key={`pattern-${p.id}`} id={`pattern-${p.id}`} patternUnits="userSpaceOnUse" width="1" height="1">
-                <image href={p.imageUrl} width="100%" height="100%" preserveAspectRatio="xMidYMid slice" />
+              <pattern key={`pattern-${p.id}`} id={`pattern-${p.id}`} patternUnits="objectBoundingBox" patternContentUnits="objectBoundingBox" width="1" height="1">
+                <image href={p.imageUrl} x="0" y="0" width="1" height="1" preserveAspectRatio="xMidYMid slice" />
               </pattern>
             ))}
           </defs>
@@ -887,6 +896,13 @@ export default function App() {
         />
       )}
       {showNotifModal && <NotificationsModal onClose={() => setShowNotifModal(false)} />}
+      {isExporting && (
+        <div className="fixed inset-0 z-[9999] bg-slate-950 flex flex-col items-center justify-center text-white p-5 text-center">
+          <div className="w-16 h-16 border-4 border-blue-500/30 border-t-blue-500 rounded-full animate-spin mb-6" />
+          <h2 className="text-2xl font-bold mb-2">Harita Hazırlanıyor...</h2>
+          <p className="text-slate-400 text-sm">Gezdiğin tüm yerler kadraja alınıyor, lütfen bekle.</p>
+        </div>
+      )}
       {!isOnboarded && token && (
         <OnboardingModal onComplete={() => {
           localStorage.setItem(`dunya_onboarded_${user?.username}`, '1');
