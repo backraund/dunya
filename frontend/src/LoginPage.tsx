@@ -108,6 +108,8 @@ export default function LoginPage() {
                   type="text"
                   required
                   autoComplete="username"
+                  autoCapitalize="none"
+                  autoCorrect="off"
                   className="w-full pl-10 pr-4 py-3.5 bg-black/60 border border-white/10 text-white rounded-xl focus:border-blue-500 outline-none text-base placeholder:text-slate-700 transition-colors"
                   placeholder="kullaniciadi"
                   value={form.username}

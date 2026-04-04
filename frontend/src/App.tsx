@@ -140,7 +140,7 @@ export default function App() {
         geoJsonProvinceRef.current.options.style = getProvinceStyle;
         geoJsonProvinceRef.current.setStyle(getProvinceStyle);
     }
-  }, [places, showPhotoMap, darkMode, hiddenIds]);
+  }, [places, showPhotoMap, darkMode, hiddenIds, selectedCountry, provinceData]);
 
   useEffect(() => {
     if (!token) return;
@@ -346,6 +346,11 @@ export default function App() {
   const getWorldStyle = (feature: any) => {
     let iso = feature.properties['ISO3166-1-Alpha-3'];
     if (feature.properties.name === 'Northern Cyprus') iso = 'TRNC';
+
+    if (selectedCountry?.id === iso && provinceData) {
+      // Hide country base layer if we are rendering its provinces natively on top
+      return { fillColor: 'transparent', fillOpacity: 0, color: 'transparent', weight: 0 };
+    }
 
     const placeWithImg = showPhotoMap ? placesRef.current.find(p => p.country_id === iso && p.imageUrl && !hiddenIds.has(p.id)) : null;
     const cColor = getCountryColor(iso);
