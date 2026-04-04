@@ -306,7 +306,12 @@ export default function App() {
 
   const handleExportMap = () => {
     setShowSettingsModal(false);
+    setSelectedCountry(null);
+    setSelectedProvince('');
+    setProvinceData(null);
+    setIsModalOpen(false);
     setIsExporting(true);
+
     if (placesRef.current.length > 0 && geoJsonWorldRef.current) {
       const layers = geoJsonWorldRef.current.getLayers();
       const boundsList = layers
@@ -319,11 +324,14 @@ export default function App() {
          .filter(Boolean);
       
       if (boundsList.length > 0) {
-         let allBounds = boundsList[0];
+         let allBounds = L.latLngBounds(boundsList[0].getSouthWest(), boundsList[0].getNorthEast());
          for(let i=1; i<boundsList.length; i++) allBounds.extend(boundsList[i]);
          setSelectedBounds(allBounds);
       }
+    } else {
+      setSelectedBounds(null); // Return to default
     }
+    
     setTimeout(() => {
        setIsExporting(false);
        setTimeout(() => window.print(), 100);
