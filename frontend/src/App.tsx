@@ -850,6 +850,32 @@ export default function App() {
           </div>
         </div>
       )}
+
+      {/* ===== DESKTOP FLOATING TOOLBAR (RIGHT) ===== */}
+      <div className="hidden md:flex absolute top-6 right-6 z-[1000] flex-col gap-3">
+        <button onClick={() => setShowStatsModal(true)} className="bg-black/60 backdrop-blur-xl hover:bg-blue-600/20 text-white p-3.5 rounded-2xl border border-white/10 hover:border-blue-500/50 shadow-2xl transition-all group relative flex items-center justify-center">
+          <BarChart2 size={24} className="text-blue-400 group-hover:scale-110 transition-transform" />
+          <span className="absolute right-[calc(100%+16px)] top-1/2 -translate-y-1/2 bg-black/90 text-white text-xs font-bold px-4 py-2 rounded-xl opacity-0 group-hover:opacity-100 transition-all transform translate-x-2 group-hover:translate-x-0 whitespace-nowrap border border-white/10 pointer-events-none shadow-xl">{t.stats}</span>
+        </button>
+        <button onClick={() => setShowBucketModal(true)} className="bg-black/60 backdrop-blur-xl hover:bg-amber-600/20 text-white p-3.5 rounded-2xl border border-white/10 hover:border-amber-500/50 shadow-2xl transition-all group relative flex items-center justify-center">
+          <Bookmark size={24} className="text-amber-400 group-hover:scale-110 transition-transform" />
+          <span className="absolute right-[calc(100%+16px)] top-1/2 -translate-y-1/2 bg-black/90 text-white text-xs font-bold px-4 py-2 rounded-xl opacity-0 group-hover:opacity-100 transition-all transform translate-x-2 group-hover:translate-x-0 whitespace-nowrap border border-white/10 pointer-events-none shadow-xl">{t.bucketList}</span>
+        </button>
+        <button onClick={() => setShowTimelineModal(true)} className="bg-black/60 backdrop-blur-xl hover:bg-emerald-600/20 text-white p-3.5 rounded-2xl border border-white/10 hover:border-emerald-500/50 shadow-2xl transition-all group relative flex items-center justify-center">
+          <Clock size={24} className="text-emerald-400 group-hover:scale-110 transition-transform" />
+          <span className="absolute right-[calc(100%+16px)] top-1/2 -translate-y-1/2 bg-black/90 text-white text-xs font-bold px-4 py-2 rounded-xl opacity-0 group-hover:opacity-100 transition-all transform translate-x-2 group-hover:translate-x-0 whitespace-nowrap border border-white/10 pointer-events-none shadow-xl">{t.timeline}</span>
+        </button>
+        <button onClick={() => setShowNotifModal(true)} className="bg-black/60 backdrop-blur-xl hover:bg-violet-600/20 text-white p-3.5 rounded-2xl border border-white/10 hover:border-violet-500/50 shadow-2xl transition-all group relative flex items-center justify-center">
+          <Bell size={24} className="text-violet-400 group-hover:scale-110 transition-transform" />
+          <span className="absolute right-[calc(100%+16px)] top-1/2 -translate-y-1/2 bg-black/90 text-white text-xs font-bold px-4 py-2 rounded-xl opacity-0 group-hover:opacity-100 transition-all transform translate-x-2 group-hover:translate-x-0 whitespace-nowrap border border-white/10 pointer-events-none shadow-xl">{t.notifications}</span>
+        </button>
+        <div className="w-full h-px bg-white/10 my-1 rounded-full" />
+        <button onClick={() => setShowSettingsModal(true)} className="bg-black/60 backdrop-blur-xl hover:bg-slate-600/40 text-white p-3.5 rounded-2xl border border-white/10 hover:border-slate-400/50 shadow-2xl transition-all group relative flex items-center justify-center">
+          <Settings size={24} className="text-slate-400 group-hover:scale-110 transition-transform hover:rotate-90" />
+          <span className="absolute right-[calc(100%+16px)] top-1/2 -translate-y-1/2 bg-black/90 text-white text-xs font-bold px-4 py-2 rounded-xl opacity-0 group-hover:opacity-100 transition-all transform translate-x-2 group-hover:translate-x-0 whitespace-nowrap border border-white/10 pointer-events-none shadow-xl">{t.settings}</span>
+        </button>
+      </div>
+
       {/* ===== MOBILE BOTTOM NAV ===== */}
       <div className="md:hidden fixed bottom-0 left-0 right-0 z-[1500] bg-black/80 backdrop-blur-xl border-t border-white/10 flex items-center justify-around"
         style={{ paddingBottom: 'max(12px, env(safe-area-inset-bottom))', paddingTop: '8px' }}>
