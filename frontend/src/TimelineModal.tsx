@@ -75,8 +75,21 @@ export default function TimelineModal({ onClose, showPartner, onFocus }: Props) 
     }
   };
 
-  const scrollLeft = () => scrollRef.current?.scrollBy({ left: -200, behavior: 'smooth' });
-  const scrollRight = () => scrollRef.current?.scrollBy({ left: 200, behavior: 'smooth' });
+  const stepLeft = () => {
+    setSelectedIndex(prev => {
+      const next = prev > 0 ? prev - 1 : prev;
+      focusIndex(next);
+      return next;
+    });
+  };
+
+  const stepRight = () => {
+    setSelectedIndex(prev => {
+      const next = prev < events.length - 1 ? prev + 1 : prev;
+      focusIndex(next);
+      return next;
+    });
+  };
 
   return (
     <div className="fixed inset-0 z-[3000] flex flex-col justify-end pointer-events-none" style={{ minHeight: '100dvh' }}>
@@ -102,10 +115,10 @@ export default function TimelineModal({ onClose, showPartner, onFocus }: Props) 
             )}
           </h2>
           <div className="flex items-center gap-2">
-            <button onClick={scrollLeft} className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-white/10 transition-colors">
+            <button onClick={stepLeft} className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-white/10 transition-colors">
               <ChevronLeft size={16} />
             </button>
-            <button onClick={scrollRight} className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-white/10 transition-colors">
+            <button onClick={stepRight} className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-white/10 transition-colors">
               <ChevronRight size={16} />
             </button>
             <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-white/10 transition-colors ml-1">

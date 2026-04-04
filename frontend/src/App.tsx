@@ -587,7 +587,7 @@ export default function App() {
               <h2 className="text-white font-bold text-base">Seyahat Rehberi</h2>
               <span className="bg-blue-500/20 text-blue-400 text-xs px-2 py-1 rounded-md font-bold">{visitedCountries.length} Ülke</span>
             </div>
-            <div className="overflow-y-auto flex flex-col gap-2 p-4">
+            <div className="overflow-y-auto flex flex-col gap-2 p-4 pb-32">
               {visitedCountries.map(vc => (
                 <div key={vc.country_id} className="bg-white/5 rounded-xl border border-white/5 overflow-hidden">
                   <button
