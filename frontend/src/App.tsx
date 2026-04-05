@@ -22,6 +22,15 @@ localforage.config({
 
 const PASTEL_COLORS = ['#AEC6CF', '#FFB7B2', '#77DD77', '#FDFD96', '#CBAACB', '#FFB347'];
 
+const MOOD_EMOJIS = ['😍', '😂', '😡', '✅', '❌', '😐'] as const;
+
+/** Ek geoBoundary bozuk adlarını states.json ile tamamlamana yardım — örnekler */
+const PROVINCE_NAME_OVERRIDES: Record<string, string> = {
+  'CD-BU': 'Bas-Uélé',
+  'CD-HK': 'Haut-Katanga',
+  'CD-HL': 'Haut-Lomami',
+};
+
 // Global GeoBoundaries datasetindeki Türkçe bozulmalarını aşmak için katı sözlük
 const TURKEY_PROVINCES: Record<string, string> = {
   "TR-01": "Adana", "TR-02": "Adıyaman", "TR-03": "Afyonkarahisar", "TR-04": "Ağrı", "TR-05": "Amasya", "TR-06": "Ankara", "TR-07": "Antalya", "TR-08": "Artvin", "TR-09": "Aydın", "TR-10": "Balıkesir", "TR-11": "Bilecik", "TR-12": "Bingöl", "TR-13": "Bitlis", "TR-14": "Bolu", "TR-15": "Burdur", "TR-16": "Bursa", "TR-17": "Çanakkale", "TR-18": "Çankırı", "TR-19": "Çorum", "TR-20": "Denizli", "TR-21": "Diyarbakır", "TR-22": "Edirne", "TR-23": "Elazığ", "TR-24": "Erzincan", "TR-25": "Erzurum", "TR-26": "Eskişehir", "TR-27": "Gaziantep", "TR-28": "Giresun", "TR-29": "Gümüşhane", "TR-30": "Hakkari", "TR-31": "Hatay", "TR-32": "Isparta", "TR-33": "Mersin", "TR-34": "İstanbul", "TR-35": "İzmir", "TR-36": "Kars", "TR-37": "Kastamonu", "TR-38": "Kayseri", "TR-39": "Kırklareli", "TR-40": "Kırşehir", "TR-41": "Kocaeli", "TR-42": "Konya", "TR-43": "Kütahya", "TR-44": "Malatya", "TR-45": "Manisa", "TR-46": "Kahramanmaraş", "TR-47": "Mardin", "TR-48": "Muğla", "TR-49": "Muş", "TR-50": "Nevşehir", "TR-51": "Niğde", "TR-52": "Ordu", "TR-53": "Rize", "TR-54": "Sakarya", "TR-55": "Samsun", "TR-56": "Siirt", "TR-57": "Sinop", "TR-58": "Sivas", "TR-59": "Tekirdağ", "TR-60": "Tokat", "TR-61": "Trabzon", "TR-62": "Tunceli", "TR-63": "Şanlıurfa", "TR-64": "Uşak", "TR-65": "Van", "TR-66": "Yozgat", "TR-67": "Zonguldak", "TR-68": "Aksaray", "TR-69": "Bayburt", "TR-70": "Karaman", "TR-71": "Kırıkkale", "TR-72": "Batman", "TR-73": "Şırnak", "TR-74": "Bartın", "TR-75": "Ardahan", "TR-76": "Iğdır", "TR-77": "Yalova", "TR-78": "Karabük", "TR-79": "Kilis", "TR-80": "Osmaniye", "TR-81": "Düzce"
@@ -35,6 +44,7 @@ type Place = {
   color: string;
   imageUrl?: string;
   note?: string;
+  mood?: string;
   from_partner?: boolean;
 };
 
@@ -55,7 +65,7 @@ function MapController({ selectedBounds }: { selectedBounds: L.LatLngBounds | nu
 
 export default function App() {
   // Auth is guaranteed by RootApp in main.tsx — no need to check here
-  const { user, token } = useAuth();
+  const { user, token, refreshUser, resendVerification } = useAuth();
   const { t } = useI18n();
 
   const authHeaders = { Authorization: `Bearer ${token}` };
@@ -74,6 +84,7 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'view' | 'add'>('view');
+  const [cityModalPhase, setCityModalPhase] = useState<'fork' | 'view' | 'dig' | 'wish'>('fork');
   const [expandedCart, setExpandedCart] = useState<string | null>(null);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
@@ -94,7 +105,10 @@ export default function App() {
   const [formData, setFormData] = useState({
     color: PASTEL_COLORS[0],
     note: '',
-    file: null as File | null
+    file: null as File | null,
+    mood: '' as string,
+    digWantPhoto: false,
+    wishRefFile: null as File | null,
   });
   const geoJsonWorldRef = useRef<any>(null);
   const geoJsonProvinceRef = useRef<any>(null);
@@ -176,6 +190,19 @@ export default function App() {
   };
 
   useEffect(() => {
+    const q = new URLSearchParams(window.location.search);
+    const v = q.get('verify');
+    if (!v || !token) return;
+    axios.get('/api/auth/verify-email', { params: { token: v } })
+      .then(() => {
+        showToast('E-posta doğrulandı');
+        refreshUser();
+        window.history.replaceState({}, '', window.location.pathname);
+      })
+      .catch(() => showToast('Doğrulama başarısız', 'error'));
+  }, [token]);
+
+  useEffect(() => {
     if (!token) return;
     // 1. ÖNCE localforage'dan anlık yükle
     localforage.getItem<Place[]>(cacheKey).then(cached => {
@@ -253,6 +280,9 @@ export default function App() {
     if (iso && TURKEY_PROVINCES[iso]) {
       return TURKEY_PROVINCES[iso];
     }
+    if (iso && PROVINCE_NAME_OVERRIDES[iso]) {
+      return PROVINCE_NAME_OVERRIDES[iso];
+    }
     const rawName = feature.properties.shapeName || feature.properties.name || "Bilinmeyen İl";
 
     // Tüm DÜNYA genelindeki `geoBoundaries` "??" bozuk karakterlerini Regex ile otomatik maskeleme ve tespitte bulunma
@@ -277,9 +307,17 @@ export default function App() {
   const handleProvinceClick = (feature: any) => {
     const provinceName = getProvinceName(feature);
     setSelectedProvince(provinceName);
-    
     const alreadyVisited = placesRef.current.find(p => p.country_id === selectedCountry?.id && p.city === provinceName);
+    setCityModalPhase(alreadyVisited ? 'view' : 'fork');
     setActiveTab(alreadyVisited ? 'view' : 'add');
+    setFormData(prev => ({
+      ...prev,
+      note: '',
+      file: null,
+      mood: '',
+      digWantPhoto: false,
+      wishRefFile: null,
+    }));
     setIsModalOpen(true);
   };
 
@@ -291,7 +329,8 @@ export default function App() {
     setIsModalOpen(false);
   };
 
-  const handleTimelineFocus = (countryId: string, city?: string) => {
+  const handleTimelineFocus = (countryId: string, _city?: string) => {
+    void _city;
     if (!worldData || !geoJsonWorldRef.current) return;
     const layers = geoJsonWorldRef.current.getLayers();
     const layer = layers.find((l: any) => {
@@ -347,12 +386,6 @@ export default function App() {
     }, 100);
   };
 
-  const getPlaceColor = (countryId: string, shapeName: string) => {
-    // hiddenIds ref'e erişemiyoruz, ama snapshot alabiliyoruz
-    const place = placesRef.current.find(p => p.country_id === countryId && p.city === shapeName);
-    return place ? place.color : null;
-  };
-
   const getCountryColor = (countryId: string) => {
     const place = placesRef.current.find(p => p.country_id === countryId);
     return place ? place.color : null;
@@ -369,7 +402,7 @@ export default function App() {
           geoJsonWorldRef.current.resetStyle(e.target);
         }
       },
-      click: (e: any) => {
+      click: () => {
         handleCountryClick(feature, layer);
       }
     });
@@ -427,22 +460,30 @@ export default function App() {
     };
   };
 
+  const submitWishlistFromMap = async () => {
+    if (!selectedCountry || !selectedProvince) return;
+    try {
+      const fd = new FormData();
+      fd.append('country_id', selectedCountry.id);
+      fd.append('country_name', selectedCountry.name);
+      fd.append('city', selectedProvince);
+      if (formData.note) fd.append('note', formData.note);
+      if (formData.mood) fd.append('mood', formData.mood);
+      if (formData.wishRefFile) fd.append('reference_image', formData.wishRefFile);
+      await axios.post('/api/bucket', fd, { headers: authHeaders });
+      showToast('Gidilecekler listesine eklendi ✓');
+      setCityModalPhase('view');
+      setFormData(prev => ({ ...prev, note: '', mood: '', wishRefFile: null }));
+    } catch (apiErr: any) {
+      showToast(apiErr?.response?.data?.detail || 'Liste kaydı başarısız', 'error');
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedCountry || !selectedProvince) return;
 
     try {
-      // Resmi Base64'e kodla
-      let b64Image: string | undefined = undefined;
-      if (formData.file) {
-        const reader = new FileReader();
-        b64Image = await new Promise<string>((resolve, reject) => {
-          reader.readAsDataURL(formData.file as File);
-          reader.onload = () => resolve(reader.result as string);
-          reader.onerror = error => reject(error);
-        });
-      }
-
       const newPlace: Place = {
         id: Date.now().toString(),
         country_id: selectedCountry.id,
@@ -450,10 +491,10 @@ export default function App() {
         city: selectedProvince,
         color: formData.color,
         note: formData.note,
-        imageUrl: b64Image
+        mood: formData.mood || undefined,
+        imageUrl: undefined,
       };
 
-      // Backend API'ye gönder (JWT authentication)
       try {
         const fd = new FormData();
         fd.append('country_id', newPlace.country_id);
@@ -461,22 +502,27 @@ export default function App() {
         fd.append('city', newPlace.city);
         fd.append('color', newPlace.color);
         if (formData.note) fd.append('note', formData.note);
-        if (b64Image) fd.append('imageUrl', b64Image);
+        if (formData.mood) fd.append('mood', formData.mood);
+        if (formData.digWantPhoto && formData.file) fd.append('file', formData.file);
         const res = await axios.post('/api/places', fd, { headers: authHeaders });
-        const savedPlace = { ...newPlace, ...res.data };
+        const savedPlace = { ...newPlace, ...res.data, imageUrl: res.data.imageUrl };
         const updatedPlaces = [...places, savedPlace];
         setPlaces(updatedPlaces);
         localforage.setItem(cacheKey, updatedPlaces);
       } catch (apiErr: any) {
-        // Backend çalışmıyorsa yerel kaydet
-        const updatedPlaces = [...places, newPlace];
+        if (apiErr?.response?.status === 403) {
+          showToast(apiErr?.response?.data?.detail || 'İşlem engellendi', 'error');
+          return;
+        }
+        const updatedPlaces = [...places, { ...newPlace, imageUrl: formData.digWantPhoto && formData.file ? URL.createObjectURL(formData.file) : undefined }];
         setPlaces(updatedPlaces);
         localforage.setItem(cacheKey, updatedPlaces);
       }
 
       showToast(`${selectedProvince} haritaya işlendi! ✓`);
+      setCityModalPhase('view');
       setActiveTab('view');
-      setFormData(prev => ({...prev, note: '', file: null}));
+      setFormData(prev => ({ ...prev, note: '', file: null, mood: '', digWantPhoto: false }));
     } catch (err) {
       console.error("DB Error", err);
       showToast("Bir hata oluştu.", 'error');
@@ -516,6 +562,20 @@ export default function App() {
 
   return (
     <div className="relative w-full bg-black text-slate-200 font-sans overflow-hidden" style={{ height: '100dvh' }}>
+
+      {user && user.email_verified === false && (
+        <div className="fixed top-0 left-0 right-0 z-[5000] bg-amber-950/95 border-b border-amber-500/40 px-4 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-center gap-2 text-center"
+          style={{ paddingTop: 'max(10px, env(safe-area-inset-top))' }}>
+          <p className="text-amber-100 text-xs sm:text-sm font-semibold">E-postanı doğrula — bazı işlemler kısıtlı.</p>
+          <button
+            type="button"
+            onClick={() => resendVerification().then(() => showToast('Doğrulama e-postası gönderildi')).catch((e: any) => showToast(e?.response?.data?.detail || 'Gönderilemedi', 'error'))}
+            className="text-xs font-bold uppercase tracking-wider bg-amber-600 hover:bg-amber-500 text-white px-4 py-2 rounded-lg"
+          >
+            Yeniden gönder
+          </button>
+        </div>
+      )}
 
       {/* ===== TOAST NOTIFICATION ===== */}
       {toast && (
@@ -762,25 +822,114 @@ export default function App() {
               </button>
             </div>
 
-            {/* Tabs */}
-            <div className="flex px-5 sm:px-6 pt-4 gap-4 bg-black/20">
+            {cityModalPhase === 'view' && (
+            <div className="flex px-5 sm:px-6 pt-4 gap-2 sm:gap-4 bg-black/20 flex-wrap">
               <button
+                type="button"
                 className={`pb-3 border-b-2 transition-colors font-semibold uppercase tracking-wider text-xs min-h-[44px] ${activeTab === 'view' ? 'text-blue-400 border-blue-400' : 'text-slate-500 border-transparent'}`}
-                onClick={() => setActiveTab('view')}
+                onClick={() => { setActiveTab('view'); }}
               >
-                Gezilen Yerler
+                Gezilen
               </button>
               <button
-                className={`pb-3 border-b-2 transition-colors font-semibold uppercase tracking-wider text-xs min-h-[44px] ${activeTab === 'add' ? 'text-green-400 border-green-400' : 'text-slate-500 border-transparent'}`}
-                onClick={() => setActiveTab('add')}
+                type="button"
+                className={`pb-3 border-b-2 transition-colors font-semibold uppercase tracking-wider text-xs min-h-[44px] ${activeTab === 'add' ? 'text-emerald-400 border-emerald-400' : 'text-slate-500 border-transparent'}`}
+                onClick={() => { setCityModalPhase('dig'); setActiveTab('add'); }}
               >
-                <span className="flex items-center gap-2">Pini Zapt Et ✦</span>
+                Kazı!
+              </button>
+              <button
+                type="button"
+                className="pb-3 border-b-2 border-transparent text-slate-500 hover:text-amber-400 transition-colors font-semibold uppercase tracking-wider text-xs min-h-[44px]"
+                onClick={() => setCityModalPhase('wish')}
+              >
+                Gitmek istiyorum
               </button>
             </div>
+            )}
+
+            {(cityModalPhase === 'dig' || cityModalPhase === 'wish') && (
+              <div className="px-5 sm:px-6 pt-3 flex bg-black/20">
+                <button
+                  type="button"
+                  onClick={() => setCityModalPhase(visibleCountryPlaces.filter(p => p.city === selectedProvince).length ? 'view' : 'fork')}
+                  className="text-xs font-bold text-slate-400 hover:text-white uppercase tracking-widest"
+                >
+                  ← Geri
+                </button>
+              </div>
+            )}
 
             {/* Content */}
             <div className="flex-1 overflow-y-auto p-5 sm:p-6 scrollbar-thin scrollbar-thumb-slate-700">
-              {activeTab === 'view' && (
+              {cityModalPhase === 'fork' && (
+                <div className="flex flex-col gap-4 py-2">
+                  <p className="text-slate-400 text-sm leading-relaxed">Bu bölge için bir yol seç: gezildi olarak işaretle veya gidilecekler listesine al.</p>
+                  <button
+                    type="button"
+                    onClick={() => { setCityModalPhase('dig'); setActiveTab('add'); }}
+                    className="w-full py-4 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-extrabold text-sm uppercase tracking-widest shadow-lg min-h-[52px]"
+                  >
+                    Kazı! (Burayı ziyaret ettim)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCityModalPhase('wish')}
+                    className="w-full py-4 rounded-2xl bg-gradient-to-r from-amber-600 to-orange-600 text-white font-extrabold text-sm uppercase tracking-widest shadow-lg min-h-[52px]"
+                  >
+                    Buraya gitmek istiyorum
+                  </button>
+                </div>
+              )}
+
+              {cityModalPhase === 'wish' && (
+                <div className="flex flex-col gap-5">
+                  <p className="text-slate-500 text-xs">Referans fotoğraf haritada görünmez; sadece listede saklanır.</p>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-400 mb-2 uppercase tracking-wide">Not</label>
+                    <textarea
+                      rows={3}
+                      className="w-full p-4 bg-black/50 border border-white/10 text-white rounded-xl focus:border-amber-500 outline-none resize-none text-base"
+                      value={formData.note}
+                      onChange={e => setFormData({ ...formData, note: e.target.value })}
+                      placeholder="Planlar, poz fikirleri..."
+                    />
+                  </div>
+                  <div>
+                    <span className="block text-xs font-bold text-slate-400 mb-2 uppercase tracking-wide">Duygu (isteğe bağlı)</span>
+                    <div className="flex flex-wrap gap-2">
+                      {MOOD_EMOJIS.map(m => (
+                        <button
+                          key={m}
+                          type="button"
+                          onClick={() => setFormData(prev => ({ ...prev, mood: prev.mood === m ? '' : m }))}
+                          className={`text-2xl p-2 rounded-xl border transition-all ${formData.mood === m ? 'border-amber-400 bg-amber-500/20 scale-110' : 'border-white/10 bg-white/5 opacity-80'}`}
+                        >
+                          {m}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-400 mb-2 uppercase tracking-wide">Referans fotoğraf (isteğe bağlı)</label>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="w-full text-slate-400 text-sm file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:bg-amber-600 file:text-white"
+                      onChange={e => setFormData({ ...formData, wishRefFile: e.target.files?.[0] || null })}
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={submitWishlistFromMap}
+                    className="w-full py-4 rounded-xl bg-amber-600 text-white font-extrabold text-sm uppercase tracking-widest hover:bg-amber-500 min-h-[52px]"
+                  >
+                    Listeye ekle
+                  </button>
+                </div>
+              )}
+
+              {cityModalPhase === 'view' && activeTab === 'view' && (
                 <div className="flex flex-col gap-6">
                        {countryImages.length > 0 && (
                     <div className="mb-4">
@@ -839,7 +988,7 @@ export default function App() {
                     {visibleCountryPlaces.filter(p => p.city === selectedProvince).length === 0 ? (
                       <div className="bg-black/40 rounded-xl p-8 text-center border border-white/5">
                         <p className="text-slate-500 text-sm mb-4">Bu koordinat için aktif bir veri bulunamadı.</p>
-                        <button onClick={() => setActiveTab('add')} className="text-blue-400 font-bold text-xs uppercase tracking-wider border border-blue-500/30 px-4 py-3 rounded-lg bg-blue-500/10 min-h-[44px]">Sisteme Giriş Yap</button>
+                        <button type="button" onClick={() => { setCityModalPhase('dig'); setActiveTab('add'); }} className="text-blue-400 font-bold text-xs uppercase tracking-wider border border-blue-500/30 px-4 py-3 rounded-lg bg-blue-500/10 min-h-[44px]">Kazı başlat</button>
                       </div>
                     ) : (
                       <div className="flex flex-col gap-4">
@@ -856,6 +1005,9 @@ export default function App() {
                                 <EyeOff size={15} />
                               </button>
                             </div>
+                            {place.mood && (
+                              <p className="text-2xl">{place.mood}</p>
+                            )}
                             {place.note && (
                               <p className="text-slate-300 text-sm mt-1 bg-black/60 p-4 rounded-xl border border-white/5 leading-relaxed">{place.note}</p>
                             )}
@@ -867,54 +1019,85 @@ export default function App() {
                 </div>
               )}
 
-              {activeTab === 'add' && (
+              {cityModalPhase === 'dig' && (
                 <form onSubmit={handleSubmit} className="flex flex-col gap-5">
-                  {/* JWT auth ile giriş yapıldığı için şifre
-                      alanına gerek yok — kullanıcı kimliği token’dan geliyor */}
-                  <hr className="border-white/5" />
+                  <p className="text-slate-500 text-xs">Sadece reng ile boyamak mı, yoksa anı fotoğrafı eklemek mi istiyorsun?</p>
+                  <div className="flex gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setFormData(prev => ({ ...prev, digWantPhoto: false, file: null }))}
+                      className={`flex-1 py-3 rounded-xl text-xs font-bold uppercase border ${!formData.digWantPhoto ? 'border-emerald-400 bg-emerald-500/20 text-white' : 'border-white/10 text-slate-500'}`}
+                    >
+                      Sadece boya
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setFormData(prev => ({ ...prev, digWantPhoto: true }))}
+                      className={`flex-1 py-3 rounded-xl text-xs font-bold uppercase border ${formData.digWantPhoto ? 'border-emerald-400 bg-emerald-500/20 text-white' : 'border-white/10 text-slate-500'}`}
+                    >
+                      Fotoğraf ekle
+                    </button>
+                  </div>
                   <div>
-                    <label className="block text-xs font-bold text-slate-400 mb-2 uppercase tracking-wide">Durum Notu</label>
+                    <span className="block text-xs font-bold text-slate-400 mb-2 uppercase tracking-wide">Duygu (isteğe bağlı)</span>
+                    <div className="flex flex-wrap gap-2">
+                      {MOOD_EMOJIS.map(m => (
+                        <button
+                          key={m}
+                          type="button"
+                          onClick={() => setFormData(prev => ({ ...prev, mood: prev.mood === m ? '' : m }))}
+                          className={`text-2xl p-2 rounded-xl border transition-all ${formData.mood === m ? 'border-blue-400 bg-blue-500/20 scale-110' : 'border-white/10 bg-white/5 opacity-80'}`}
+                        >
+                          {m}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-400 mb-2 uppercase tracking-wide">Not</label>
                     <textarea
                       rows={4}
                       className="w-full p-4 bg-black/50 border border-white/10 text-white rounded-xl focus:border-blue-500 outline-none transition-all placeholder:text-slate-600 resize-none text-base"
                       value={formData.note}
-                      onChange={(e) => setFormData({...formData, note: e.target.value})}
-                      placeholder="Görev/Gezi detayları..."
+                      onChange={e => setFormData({ ...formData, note: e.target.value })}
+                      placeholder="Anı veya durum..."
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-bold text-slate-400 mb-3 uppercase tracking-wide">Harita Boyama Rengi <span className="text-rose-500">*</span></label>
-                    <div className="flex gap-4 bg-black/40 p-4 rounded-xl border border-white/5 justify-center">
+                    <label className="block text-xs font-bold text-slate-400 mb-3 uppercase tracking-wide">Harita rengi <span className="text-rose-500">*</span></label>
+                    <div className="flex gap-4 bg-black/40 p-4 rounded-xl border border-white/5 justify-center flex-wrap">
                       {PASTEL_COLORS.map(color => (
                         <button
                           key={color}
                           type="button"
                           className={`w-11 h-11 rounded-full transition-all ${formData.color === color ? 'ring-4 ring-white/50 scale-125 shadow-[0_0_20px_rgba(255,255,255,0.2)]' : 'ring-2 ring-transparent opacity-60'}`}
                           style={{ backgroundColor: color }}
-                          onClick={() => setFormData({...formData, color})}
+                          onClick={() => setFormData({ ...formData, color })}
                         />
                       ))}
                     </div>
                   </div>
-                  <div>
-                    <label className="block text-xs font-bold text-slate-400 mb-2 uppercase tracking-wide">Saha Görseli (Opsiyonel)</label>
-                    <div className="border border-dashed border-white/20 bg-black/30 rounded-xl p-8 flex flex-col items-center justify-center">
-                      <input type="file" accept="image/*" className="hidden" id="imageUpload" onChange={(e) => setFormData({...formData, file: e.target.files?.[0] || null})} />
-                      <label htmlFor="imageUpload" className="cursor-pointer flex flex-col items-center w-full">
-                        <div className="bg-white/5 p-4 rounded-full mb-3">
-                          <ImageIcon className="text-slate-500" size={28} />
-                        </div>
-                        <span className="text-xs font-bold text-slate-500 text-center uppercase tracking-wide">
-                          {formData.file ? formData.file.name : 'Dosya Seç'}
-                        </span>
-                      </label>
+                  {formData.digWantPhoto && (
+                    <div>
+                      <label className="block text-xs font-bold text-slate-400 mb-2 uppercase tracking-wide">Saha görseli</label>
+                      <div className="border border-dashed border-white/20 bg-black/30 rounded-xl p-8 flex flex-col items-center justify-center">
+                        <input type="file" accept="image/*" className="hidden" id="imageUploadDig" onChange={e => setFormData({ ...formData, file: e.target.files?.[0] || null })} />
+                        <label htmlFor="imageUploadDig" className="cursor-pointer flex flex-col items-center w-full">
+                          <div className="bg-white/5 p-4 rounded-full mb-3">
+                            <ImageIcon className="text-slate-500" size={28} />
+                          </div>
+                          <span className="text-xs font-bold text-slate-500 text-center uppercase tracking-wide">
+                            {formData.file ? formData.file.name : 'Dosya seç'}
+                          </span>
+                        </label>
+                      </div>
                     </div>
-                  </div>
+                  )}
                   <button
                     type="submit"
                     className="w-full mt-2 p-4 rounded-xl bg-blue-600 text-white font-extrabold text-sm uppercase tracking-widest hover:bg-blue-500 transition-all min-h-[52px]"
                   >
-                    Sisteme İşle
+                    Sisteme işle
                   </button>
                 </form>
               )}

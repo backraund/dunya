@@ -6,6 +6,8 @@ interface User {
   display_name: string;
   email: string;
   partner: string | null;
+  email_verified: boolean;
+  public_map_enabled?: boolean;
 }
 
 interface AuthContextType {
@@ -16,6 +18,7 @@ interface AuthContextType {
   register: (username: string, email: string, password: string, displayName: string) => Promise<void>;
   logout: () => void;
   refreshUser: () => Promise<void>;
+  resendVerification: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType>(null!);
@@ -41,7 +44,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const res = await axios.get('/api/auth/me', {
         headers: { Authorization: `Bearer ${t}` },
       });
-      setUser(res.data);
+      const d = res.data;
+      setUser({
+        ...d,
+        email_verified: d.email_verified === undefined ? true : !!d.email_verified,
+        public_map_enabled: !!d.public_map_enabled,
+      });
     } catch {
       // Token invalid or expired → logout cleanly
       localStorage.removeItem('dunya_token');
@@ -60,7 +68,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const { token: t, ...userData } = res.data;
     localStorage.setItem('dunya_token', t);
     setToken(t);
-    setUser(userData as User);
+    setUser({
+      ...userData,
+      email_verified: (userData as any).email_verified === undefined ? true : !!(userData as any).email_verified,
+    } as User);
   };
 
   const register = async (username: string, email: string, password: string, displayName: string) => {
@@ -73,7 +84,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const { token: t, ...userData } = res.data;
     localStorage.setItem('dunya_token', t);
     setToken(t);
-    setUser(userData as User);
+    setUser({
+      ...userData,
+      email_verified: (userData as any).email_verified === undefined ? true : !!(userData as any).email_verified,
+    } as User);
+  };
+
+  const resendVerification = async () => {
+    const t = localStorage.getItem('dunya_token');
+    if (!t) return;
+    await axios.post('/api/auth/resend-verification', null, { headers: { Authorization: `Bearer ${t}` } });
   };
 
   const logout = () => {
@@ -83,7 +103,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, loading, login, register, logout, refreshUser }}>
+    <AuthContext.Provider value={{ user, token, loading, login, register, logout, refreshUser, resendVerification }}>
       {children}
     </AuthContext.Provider>
   );

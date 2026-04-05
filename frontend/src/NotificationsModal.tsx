@@ -38,7 +38,28 @@ export default function NotificationsModal({ onClose }: Props) {
       .then(r => setEvents(r.data))
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, []);
+  }, [token]);
+
+  useEffect(() => {
+    if (!token || !user?.partner) return;
+    const url = `/api/events/partner-stream?token=${encodeURIComponent(token)}`;
+    let es: EventSource | null = null;
+    try {
+      es = new EventSource(url);
+      es.onmessage = (ev) => {
+        try {
+          const data = JSON.parse(ev.data) as NotifEvent;
+          if (!data || typeof data.action !== 'string') return;
+          setEvents((prev) => {
+            const next = [{ ...data, id: data.id || String(Date.now()) }, ...prev];
+            return next.slice(0, 50);
+          });
+        } catch { /* ignore */ }
+      };
+      es.onerror = () => { es?.close(); };
+    } catch { /* EventSource unsupported */ }
+    return () => es?.close();
+  }, [token, user?.partner]);
 
   return (
     <div className="fixed inset-0 z-[3000] flex items-end sm:items-center justify-center">

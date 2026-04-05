@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { X, UserPlus, Users, Unlink, LogOut, Mail, Map, RefreshCw } from 'lucide-react';
+import { X, UserPlus, Users, Unlink, LogOut, Mail, Map, RefreshCw, Link2, Share2 } from 'lucide-react';
 import { useAuth } from './AuthContext';
 import axios from 'axios';
 
@@ -15,8 +15,13 @@ export default function ProfileModal({ onClose, showPartnerMap, onTogglePartnerM
   const [requests, setRequests] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);
+  const [pubMap, setPubMap] = useState(!!user?.public_map_enabled);
 
   const headers = { Authorization: `Bearer ${token}` };
+
+  useEffect(() => {
+    setPubMap(!!user?.public_map_enabled);
+  }, [user?.public_map_enabled]);
 
   useEffect(() => {
     loadRequests();
@@ -78,6 +83,25 @@ export default function ProfileModal({ onClose, showPartnerMap, onTogglePartnerM
     onClose();
   };
 
+  const togglePublicMap = async () => {
+    setLoading(true);
+    setMsg(null);
+    try {
+      const fd = new FormData();
+      fd.append('public_map_enabled', (!pubMap).toString());
+      await axios.patch('/api/auth/me', fd, { headers });
+      setPubMap(!pubMap);
+      await refreshUser();
+      setMsg({ text: !pubMap ? 'Herkese açık harita açıldı' : 'Harita gizlendi', ok: true });
+    } catch (err: any) {
+      setMsg({ text: err?.response?.data?.detail || 'Güncellenemedi (e-posta doğrulaması gerekli olabilir)', ok: false });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const shareUrl = `${window.location.origin}/public/${encodeURIComponent(user?.username || '')}`;
+
   return (
     <div className="fixed inset-0 z-[3000] flex items-end sm:items-center justify-center">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
@@ -116,6 +140,39 @@ export default function ProfileModal({ onClose, showPartnerMap, onTogglePartnerM
                 </p>
               </div>
             </div>
+          </div>
+
+          <div className="bg-slate-900/60 border border-white/10 rounded-2xl p-4 flex flex-col gap-3">
+            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
+              <Share2 size={12} className="text-cyan-400" /> Herkese açık harita
+            </h3>
+            <p className="text-slate-500 text-xs leading-relaxed">
+              Açıkken bağlantıyı herkesle paylaşabilirsin; notların dahil edilmez, sadece ziyaret bölgeleri görünür.
+            </p>
+            <button
+              type="button"
+              onClick={togglePublicMap}
+              disabled={loading}
+              className={`w-full flex items-center justify-between p-3 rounded-xl border transition-colors ${pubMap ? 'border-cyan-500/50 bg-cyan-950/20' : 'border-white/10 hover:bg-white/5'}`}
+            >
+              <span className="text-sm font-semibold text-white">Haritamı herkese aç</span>
+              <div className={`w-11 h-6 rounded-full flex items-center px-0.5 ${pubMap ? 'bg-cyan-500' : 'bg-slate-700'}`}>
+                <div className={`w-5 h-5 bg-white rounded-full transition-transform ${pubMap ? 'translate-x-5' : 'translate-x-0'}`} />
+              </div>
+            </button>
+            {pubMap && user?.username && (
+              <div className="flex items-center gap-2 p-2 rounded-xl bg-black/40 border border-white/5">
+                <Link2 size={14} className="text-cyan-400 shrink-0" />
+                <span className="text-[10px] text-slate-400 truncate flex-1 font-mono">{shareUrl}</span>
+                <button
+                  type="button"
+                  onClick={() => navigator.clipboard.writeText(shareUrl)}
+                  className="text-xs font-bold text-cyan-400 px-2 py-1 shrink-0"
+                >
+                  Kopyala
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Partner section */}

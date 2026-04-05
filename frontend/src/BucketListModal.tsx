@@ -10,6 +10,8 @@ interface BucketItem {
   country_name: string;
   city?: string;
   note?: string;
+  mood?: string;
+  reference_image_url?: string;
   created_at: string;
 }
 
@@ -173,6 +175,12 @@ export default function BucketListModal({ onClose, selectedCountry, selectedCity
                       <span className="text-slate-500 text-xs">{item.country_name}</span>
                     )}
                   </div>
+                  {item.mood && (
+                    <p className="text-lg ml-5 mt-1">{item.mood}</p>
+                  )}
+                  {item.reference_image_url && (
+                    <img src={item.reference_image_url} alt="" className="mt-2 ml-5 max-h-32 rounded-lg border border-white/10 object-cover" />
+                  )}
                   {item.note && (
                     <p className="text-slate-400 text-xs leading-relaxed ml-5">{item.note}</p>
                   )}

@@ -35,3 +35,21 @@ Eğer sistemi test edecek bir QA uzmanı veya Geliştiriciysen bu dokümandaki a
 ## Senaryo 6: PDF / Haritayı Görüntü Olarak Alma (Export Engine)
 *   **Adım:** Menü -> Ayarlar veya Ayarlar alt menüsünden -> **Dışa Aktar** basın.
 *   **Beklenen:** Kapkaranlık bir ekran çıkıp `Harita Hazırlanıyor...` animasyonu dönmelidir. Arka planda siz Rusya'da da, Avustralya'da da, İngiltere'de de pini zaptetseniz sistem bunların en uç koordinatlarını **Kuşbakışı Kadraj Alarak** kendi içindeki Bounds formulüyle sınırlandırır ve zoom'lar. `1.5 - 2` saniyelik bu loading'in hemen bitiminde tarayıcının yerli Print Screen (A4 mode PDF exporter) sekmesi haritayı kesik vermeksizin önüze sunar.
+
+## Senaryo 7: E-posta doğrulama ve şifre sıfırlama
+*   **SMTP yapılandırması:** Backend `SMTP_HOST` vb. ayarlı değilse yeni kayıtlar otomatik doğrulanır; SMTP açıkken kayıt sonrası e-postadaki bağlantı veya giriş sonrası üst banttaki «Yeniden gönder» ile doğrulama test edilmelidir.
+*   **Doğrulanmamış:** Üst bantta uyarı görünmeli; pin / bucket ekleme gibi yazma API’leri 403 dönmeli (doğrulama sonrası açılır).
+*   **Şifremi unuttum:** Giriş ekranında akış, e-postaya düşen (veya SMTP yoksa konsol logundaki) reset linki + yeni şifre formu ile tamamlanmalıdır.
+
+## Senaryo 8: Şehir modalı — Kazı / Gidilecekler
+*   **Adım:** Gezilmemiş bir ile tıklayın.
+*   **Beklenen:** Önce «Kazı!» ve «Buraya gitmek istiyorum» seçimi çıkmalı. Kazı’da «Sadece boya» / «Fotoğraf ekle», duygu çubuğu ve not alanı kullanılabilmeli; fotoğraf dosyası multipart olarak MinIO’ya gidebilmeli. Gidilecekler’de referans fotoğraf (isteğe bağlı), not ve duygu ile liste API’sine eklenmeli; referans haritada görünmemeli, bucket listesinde görünmeli.
+
+## Senaryo 9: Herkese açık harita
+*   **Adım:** Profil modalında «Haritamı herkese aç» açıkken verilen `/public/{kullanıcıadı}` adresini gizli pencerede açın (giriş yapmadan).
+*   **Beklenen:** Meta ve yerler API’si 200; ziyaret edilen ülkeler haritada renklensin. Toggle kapalıyken 404 veya «gizli» mesajı.
+
+## Senaryo 10: Partner canlı bildirim (SSE)
+*   **Önkoşul:** İki hesap partner olmalı.
+*   **Adım:** Biri haritaya yeni pin eklerken diğeri bildirim panelini açık tutsun.
+*   **Beklenen:** Kısa gecikmeyle (yaklaşık 2 sn döngü) partnerin timeline olayı listeye düşebilmeli (`/api/events/partner-stream` + token).
