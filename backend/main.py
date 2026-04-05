@@ -57,8 +57,14 @@ app.add_middleware(
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login", auto_error=False)
 
 # ─── DB & MinIO ──────────────────────────────────────────────────────────────
+client = None
+places_col = None
+users_col = None
+partner_requests_col = None
+bucket_col = None
+timeline_col = None
 try:
-    client = AsyncIOMotorClient(MONGO_URI)
+    client = AsyncIOMotorClient(MONGO_URI, serverSelectionTimeoutMS=10000)
     db = client.dunya
     places_col = db.places
     users_col = db.users
@@ -68,6 +74,7 @@ try:
 except Exception as e:
     print("MongoDB Error:", e)
 
+s3_client = None
 try:
     s3_client = boto3.client(
         's3',
@@ -81,9 +88,12 @@ except Exception as e:
 
 @app.on_event("startup")
 async def startup_event():
+    if s3_client is None:
+        print("MinIO devre dışı — bucket oluşturulmadı")
+        return
     try:
         s3_client.head_bucket(Bucket=BUCKET_NAME)
-    except:
+    except Exception:
         try:
             s3_client.create_bucket(Bucket=BUCKET_NAME)
             policy = {
@@ -137,6 +147,8 @@ def send_email_smtp(to_addr: str, subject: str, html_body: str, text_body: str =
 
 
 async def upload_data_url_image(username: str, data_url: str, content_type_hint: str = "image/jpeg") -> Optional[str]:
+    if s3_client is None:
+        return None
     if not data_url or not data_url.startswith("data:image"):
         return None
     try:
@@ -166,6 +178,8 @@ async def upload_data_url_image(username: str, data_url: str, content_type_hint:
 
 
 async def get_current_user(token: str = Depends(oauth2_scheme)):
+    if users_col is None:
+        raise HTTPException(status_code=503, detail="Veritabanı kullanılamıyor")
     if not token:
         raise HTTPException(status_code=401, detail="Giriş yapılmamış")
     try:
@@ -201,9 +215,11 @@ def decode_token_string(raw: str) -> Optional[str]:
 
 
 async def get_current_user_optional_sse(
-    authorization: str | None = Header(None),
-    token: str | None = Query(None),
+    authorization: Optional[str] = Header(None),
+    token: Optional[str] = Query(None),
 ):
+    if users_col is None:
+        raise HTTPException(status_code=503, detail="Servis kullanılamıyor")
     raw = token
     if not raw and authorization and authorization.startswith("Bearer "):
         raw = authorization[7:].strip()
@@ -492,7 +508,7 @@ async def create_place(
     image_url = imageUrl if imageUrl and not (imageUrl.startswith("data:image")) else None
 
     # Upload to MinIO (prefer multipart file, then migrate legacy base64)
-    if file and file.filename:
+    if file and file.filename and s3_client is not None:
         try:
             file_ext = file.filename.split(".")[-1]
             file_name = f"{uid}/{uuid.uuid4()}.{file_ext}"
@@ -570,7 +586,7 @@ async def add_bucket(
         raise HTTPException(status_code=400, detail="Zaten listede var")
 
     ref_url = None
-    if reference_image and reference_image.filename:
+    if reference_image and reference_image.filename and s3_client is not None:
         try:
             ext = reference_image.filename.split(".")[-1]
             fname = f"{current_user['username']}/bucket-ref-{uuid.uuid4()}.{ext}"
@@ -738,6 +754,8 @@ async def remove_partner(current_user=Depends(require_verified_user)):
 # ─── PUBLIC PROFILE (read-only) ─────────────────────────────────────────────
 @app.get("/api/public/{username}/meta")
 async def public_profile_meta(username: str):
+    if users_col is None:
+        raise HTTPException(status_code=503, detail="Servis kullanılamıyor")
     un = username.lower().strip()
     u = await users_col.find_one({"username": un})
     if not u or not u.get("public_map_enabled"):
@@ -750,6 +768,8 @@ async def public_profile_meta(username: str):
 
 @app.get("/api/public/{username}/places")
 async def public_profile_places(username: str):
+    if users_col is None or places_col is None:
+        raise HTTPException(status_code=503, detail="Servis kullanılamıyor")
     un = username.lower().strip()
     u = await users_col.find_one({"username": un})
     if not u or not u.get("public_map_enabled"):
